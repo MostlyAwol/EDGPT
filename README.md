@@ -94,6 +94,16 @@ Current state is also visible locally at:
 http://127.0.0.1:8080/state
 ```
 
+The state payload can be trimmed independently with query parameters:
+
+```text
+http://127.0.0.1:8080/state?history_summary=false&recent_events=0
+```
+
+`history_summary=false` omits the history summary. `recent_events` accepts a
+count from 0 to 5,000 and controls only the returned event list; EDGPT still
+uses its internal replay window to derive accurate current state.
+
 ## MCP tools
 
 ```text

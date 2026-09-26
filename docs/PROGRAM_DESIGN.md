@@ -130,6 +130,7 @@ The launcher supplies the following contract to helper processes:
 | `EDGPT_DATA_DIR` | Directory containing the SQLite history database |
 | `EDGPT_CONFIG_FILE` | Config path used by the GitHub relay |
 | `EDGPT_GITHUB_SECRET_FILE` | Encrypted GitHub token path |
+| `EDGPT_STATE_PORT` | Optional state-server port override; defaults to `8080` |
 | `PYTHONUTF8`, `PYTHONIOENCODING` | Force UTF-8 helper output |
 
 These environment variables are important seams for tests and future alternate
@@ -277,7 +278,7 @@ loopback only.
 | Endpoint | Result |
 | --- | --- |
 | `GET /` | Dashboard that refreshes `/state` every five seconds |
-| `GET /state` | Normalized current state plus raw context |
+| `GET /state` | Normalized current state plus raw context; accepts `history_summary` and `recent_events` options |
 | `GET /history/summary` | Database/history statistics |
 | `GET /history/recent?count=250` | Recent raw events |
 | `GET /history/search?q=&event=&start=&end=&limit=` | Filtered raw events |

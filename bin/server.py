@@ -16,7 +16,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 DEFAULT_ELITE_DIR = Path.home() / "Saved Games" / "Frontier Developments" / "Elite Dangerous"
 ELITE_DIR = Path(os.environ.get("ELITE_JOURNAL_DIR", str(DEFAULT_ELITE_DIR))).expanduser()
-PORT = 8080
+PORT = int(os.environ.get("EDGPT_STATE_PORT", "8080"))
 
 
 def read_json_file(filename):
@@ -42,10 +42,12 @@ def all_live_json_files():
     return result
 
 
-def build_state():
+def build_state(include_history_summary=True, recent_event_count=250):
     sync_journals()
     live_files = all_live_json_files()
-    events = recent_events(250)
+    recent_event_count = max(0, min(int(recent_event_count), 5000))
+    replay_events = recent_events(max(250, recent_event_count))
+    exposed_events = replay_events[-recent_event_count:] if recent_event_count else []
 
     loadout = latest_event("Loadout")
     location_event = latest_event("Location") or latest_event("FSDJump") or latest_event("CarrierJump")
@@ -72,16 +74,17 @@ def build_state():
         "navroute": live_files.get("NavRoute.json"),
         "loadout": loadout,
         "live_files": live_files,
-        "history_summary": history_summary(),
-        "recent_events": events,
+        "recent_events": exposed_events,
         "system_map": get_current_system_map(include_full=False),
     }
+    if include_history_summary:
+        state["history_summary"] = history_summary()
 
     replay = []
     for candidate in (location_event, load_game, loadout):
         if candidate:
             replay.append(candidate)
-    replay.extend(events)
+    replay.extend(replay_events)
 
     for e in replay:
         event = e.get("event")
@@ -168,7 +171,13 @@ class Handler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
 
         if path == "/state":
-            return send_json(self, build_state())
+            history_value = qs.get("history_summary", ["true"])[0].strip().lower()
+            include_history = history_value not in {"0", "false", "no", "off"}
+            try:
+                event_count = int(qs.get("recent_events", ["250"])[0])
+            except (TypeError, ValueError):
+                event_count = 250
+            return send_json(self, build_state(include_history, event_count))
 
         if path == "/history/summary":
             return send_json(self, history_summary())

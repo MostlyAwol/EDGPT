@@ -7,6 +7,8 @@
 - Added historical map backfill and per-system merging so repeat visits retain
   scan data that Elite does not emit again.
 - Added current/historical system-map HTTP endpoints and MCP tools.
+- Added independent `/state` controls for suppressing `history_summary` and
+  selecting zero to 5,000 returned `recent_events`.
 
 ## 0.2.0-beta
 
