@@ -13,6 +13,22 @@ DATA_DIR = Path(os.environ.get("EDGPT_DATA_DIR", "data")).expanduser()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "edgpt_history.db"
 
+SYSTEM_MAP_EVENT_TYPES = (
+    "FSDJump",
+    "DiscoveryScan",
+    "FSSBodySignals",
+    "FSSDiscoveryScan",
+    "FSSSignalDiscovered",
+    "FSSAllBodiesFound",
+    "Scan",
+    "SAAScanComplete",
+    "SAASignalsFound",
+    "ScanBaryCentre",
+    "NavBeaconScan",
+    "CodexEntry",
+    "ScanOrganic",
+)
+
 _LOCK = threading.RLock()
 
 
@@ -287,3 +303,40 @@ def get_event_page(before_id: Optional[int] = None, limit: int = 500):
         "next_before_id": items[-1]["id"] if items else None,
         "count": len(items),
     }
+
+
+def history_max_event_id():
+    """Return the current history watermark after indexing new journal lines."""
+    sync_journals()
+    with _connect() as conn:
+        row = conn.execute("SELECT COALESCE(MAX(id), 0) FROM events").fetchone()
+    return int(row[0])
+
+
+def get_system_map_event_batch(after_id=0, through_id=None, limit=2000):
+    """Read an ordered batch of events that can contribute to a system map."""
+    after_id = max(0, int(after_id))
+    limit = max(1, min(int(limit), 10000))
+    placeholders = ",".join("?" for _ in SYSTEM_MAP_EVENT_TYPES)
+    clauses = ["id > ?", f"event IN ({placeholders})"]
+    params = [after_id, *SYSTEM_MAP_EVENT_TYPES]
+    if through_id is not None:
+        clauses.append("id <= ?")
+        params.append(int(through_id))
+    params.append(limit)
+
+    with _connect() as conn:
+        rows = conn.execute(
+            f"SELECT id, raw_json FROM events WHERE {' AND '.join(clauses)} "
+            "ORDER BY id ASC LIMIT ?",
+            params,
+        ).fetchall()
+
+    items = []
+    for row in rows:
+        try:
+            event = json.loads(row["raw_json"])
+        except Exception:
+            continue
+        items.append({"id": int(row["id"]), "data": event})
+    return items

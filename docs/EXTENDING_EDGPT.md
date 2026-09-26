@@ -11,6 +11,7 @@ Classify a requested feature before editing:
 | Feature kind | Primary module | Usually also inspect |
 | --- | --- | --- |
 | New raw journal query | `bin/history_store.py` | `bin/mcp_server.py`, `bin/server.py` |
+| New system-map event/field | `bin/system_map.py` | `bin/system_map_store.py`, map tests |
 | New derived current-state field | `bin/server.py` | `bin/mcp_server.py`, relay behavior |
 | New MCP capability | `bin/mcp_server.py` | history/live-file source and README tool list |
 | New local HTTP endpoint | `bin/server.py` | consumers, privacy/CORS implications |
@@ -137,6 +138,22 @@ def get_example_history(limit: int = 100) -> list:
 6. Confirm relay hashing ignores only genuinely volatile fields.
 7. Test “never observed,” normal update, and conflicting old/new source cases.
 
+### Add information to system maps
+
+1. Add the journal event type to `SYSTEM_MAP_EVENT_TYPES` in
+   `history_store.py` so historical and new instances enter the map stream.
+2. Decide whether the event belongs to a body (`BodyID`), the system, or the
+   system-signal collection.
+3. Merge it in `system_map.apply_event()` without discarding fields already
+   learned on an earlier visit.
+4. If persisted model semantics change, increment `MAP_SCHEMA_VERSION`; the
+   cache will rebuild from raw journals.
+5. Keep the simple renderer limited to names, types, distances, and hierarchy
+   unless product requirements explicitly expand it.
+6. Put complete retained event data in the full renderer.
+7. Add tests for missing prerequisites, repeated visits, hierarchy, ordering,
+   and historical backfill.
+
 ### Add a setting
 
 1. Add a default under the appropriate `DEFAULT_CONFIG` section.
@@ -174,7 +191,8 @@ the environment and install `requirements.txt` before running checks.
 Minimum checks for ordinary changes:
 
 ```powershell
-.\.venv\Scripts\python.exe -m py_compile launcher.py bin\history_store.py bin\server.py bin\mcp_server.py bin\uploader.py
+.\.venv\Scripts\python.exe -m py_compile launcher.py bin\history_store.py bin\system_map.py bin\system_map_store.py bin\server.py bin\mcp_server.py bin\uploader.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
 Recommended journal-store tests should use temporary directories selected via

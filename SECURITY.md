@@ -2,6 +2,9 @@
 
 EDGPT must never ship with API keys, GitHub tokens, tunnel credentials, or a user's runtime `data/` directory.
 
+Both `edgpt_history.db` and `edgpt_system_maps.db` contain private commander
+activity/location history and must be treated as sensitive runtime data.
+
 Credentials entered through EDGPT are stored locally with Windows DPAPI encryption.
 
 Never post tokens, keys, `*.bin` secret files, or unredacted private logs in a public issue.

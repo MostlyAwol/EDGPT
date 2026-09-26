@@ -20,7 +20,8 @@ if (-not (Test-Path $Installer)) { throw "Missing installer." }
 $ForbiddenNames = @(
     "github_secret.bin", "openai_secret.bin", "github_token.bin",
     "launcher_secret.bin", "launcher_config.json", "config.json",
-    "edgpt_history.db", "edgpt_history.db-shm", "edgpt_history.db-wal"
+    "edgpt_history.db", "edgpt_history.db-shm", "edgpt_history.db-wal",
+    "edgpt_system_maps.db", "edgpt_system_maps.db-shm", "edgpt_system_maps.db-wal"
 )
 $Bad = Get-ChildItem $Stage -Recurse -File | Where-Object {
     $ForbiddenNames -contains $_.Name -or $_.FullName -match "\\data\\"

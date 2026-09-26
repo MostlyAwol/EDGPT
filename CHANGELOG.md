@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Added persistent simple and full text system maps built from exploration,
+  FSS, SAA, barycentre, organic, and signal journal events.
+- Added historical map backfill and per-system merging so repeat visits retain
+  scan data that Elite does not emit again.
+- Added current/historical system-map HTTP endpoints and MCP tools.
+
 ## 0.2.0-beta
 
 - Added Full Context historical journal indexing with local SQLite storage.

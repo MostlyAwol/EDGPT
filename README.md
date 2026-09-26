@@ -108,7 +108,18 @@ search_journal
 get_latest_journal_event
 get_history_summary
 get_raw_history_page
+get_current_system_map_simple
+get_current_system_map_full
+list_saved_system_maps
+get_saved_system_map_simple
+get_saved_system_map_full
 ```
+
+System maps are built incrementally from exploration journal events and saved
+by `SystemAddress`. EDGPT backfills maps from indexed historical journals and
+merges later visits into the existing map. Compact tools return a body tree
+with types and arrival distances; full tools include all retained scan and
+signal event data.
 
 ## Full Context history
 

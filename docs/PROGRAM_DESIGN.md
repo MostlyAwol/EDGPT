@@ -48,6 +48,8 @@ external AI client access to game data.
 | --- | --- | --- |
 | `launcher.py` | Tkinter UI, config, DPAPI secrets, child-process lifecycle, diagnostics | Main desktop process |
 | `bin/history_store.py` | Incremental journal ingestion and SQLite query API | Imported library |
+| `bin/system_map.py` | Pure event-to-map merging, hierarchy inference, and text rendering | Imported library |
+| `bin/system_map_store.py` | Historical backfill and persistent per-system map cache | Imported library |
 | `bin/server.py` | Derived state model, history HTTP API, small local dashboard | Child process on `127.0.0.1:8080` |
 | `bin/mcp_server.py` | MCP tools over raw/live/current Elite data | Child process on `127.0.0.1:8000/mcp` |
 | `bin/uploader.py` | Optional state and raw-file mirror using GitHub Contents API | Child process |
@@ -102,6 +104,7 @@ The launcher creates `data/` beside the application and stores:
 | `data/github_secret.bin` | GitHub token encrypted with Windows DPAPI |
 | `data/openai_secret.bin` | Tunnel API key encrypted with Windows DPAPI |
 | `data/edgpt_history.db` | Indexed journal events and ingestion cursors |
+| `data/edgpt_system_maps.db` | Persistent maps keyed by Elite `SystemAddress` |
 
 The default config has four sections:
 
@@ -229,6 +232,43 @@ server. The two representations overlap but are not identical:
 When changing the meaning of “current state,” explicitly decide whether both
 representations need the change.
 
+## Persistent system maps
+
+System maps are a second event-sourced state model. `system_map_store.py`
+backfills all relevant events from the history database, then stores one merged
+map per `SystemAddress` in `data/edgpt_system_maps.db`. A history-event watermark
+makes later updates incremental. If the history database is rebuilt or the map
+schema version changes, the map cache is safely regenerated from journals.
+
+The initial event set includes `FSDJump`, `DiscoveryScan`, `FSSDiscoveryScan`,
+`FSSSignalDiscovered`, `FSSBodySignals`, `Scan`, `ScanBaryCentre`,
+`FSSAllBodiesFound`, `SAAScanComplete`, `SAASignalsFound`, `NavBeaconScan`,
+`CodexEntry`, and `ScanOrganic`.
+
+Unlike a per-visit transient state, a map is not cleared on a later jump into
+the same system. New events merge into the saved model. This preserves the
+first visit's scan data when Elite does not emit it again, while allowing later
+FSS, SAA, organic, and signal data to enrich the map.
+
+Parentage comes from the ordered `Parents` list on `Scan` events. The first
+entry is the immediate parent. Nonzero `Null` parents represent barycentres;
+the remainder of the chain is used to infer where an otherwise parentless
+`ScanBaryCentre` belongs. Named ring events are matched to ring definitions in
+their parent body's `Scan` data. Siblings are sorted by
+`DistanceFromArrivalLS`; a barycentre without its own distance uses its nearest
+descendant for ordering.
+
+Two text renderings serve different LLM contexts:
+
+- the simple tree contains system/scan status, body names, body types, arrival
+  distances, and hierarchy; and
+- the full tree adds retained raw system, scan, surface-scan, organic, and
+  signal event data.
+
+The aggregate current-state responses include the simple map only, preventing
+the full representation from inflating every request. Dedicated HTTP endpoints
+and MCP tools retrieve full or historical maps on demand.
+
 ## Local HTTP interface
 
 `bin/server.py` uses the standard-library single-threaded `HTTPServer` bound to
@@ -241,6 +281,10 @@ loopback only.
 | `GET /history/summary` | Database/history statistics |
 | `GET /history/recent?count=250` | Recent raw events |
 | `GET /history/search?q=&event=&start=&end=&limit=` | Filtered raw events |
+| `GET /system-map/simple` | Current compact system-map tree |
+| `GET /system-map/full` | Current full system-map tree and retained event data |
+| `GET /system-maps?q=&limit=` | List/filter saved historical maps |
+| `GET /system-maps/get?system=&detail=` | Get a saved map by exact name/address |
 
 JSON responses disable caching and currently allow any CORS origin. Unknown
 paths return 404. Most read/parse errors intentionally degrade to empty or null
@@ -265,6 +309,11 @@ documentation assume the library's configured/default listener produces
 | `get_latest_journal_event` | Latest raw event for an exact type |
 | `get_history_summary` | Index statistics |
 | `get_raw_history_page` | Stable newest-first raw pagination |
+| `get_current_system_map_simple` | Compact tree for the current system |
+| `get_current_system_map_full` | Full tree for the current system |
+| `list_saved_system_maps` | Find current and historical saved maps |
+| `get_saved_system_map_simple` | Compact saved tree by name/address |
+| `get_saved_system_map_full` | Full saved tree by name/address |
 
 The basename normalization in `get_elite_live_file` prevents path traversal.
 MCP descriptions are part of the product: they tell AI clients when a tool is

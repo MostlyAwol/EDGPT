@@ -11,6 +11,7 @@ from history_store import (
     search_events,
     sync_journals,
 )
+from system_map_store import get_current_system_map, get_system_map, list_system_maps
 
 DEFAULT_ELITE_DIR = Path.home() / "Saved Games" / "Frontier Developments" / "Elite Dangerous"
 ELITE_DIR = Path(os.environ.get("ELITE_JOURNAL_DIR", str(DEFAULT_ELITE_DIR))).expanduser()
@@ -52,6 +53,7 @@ def build_current_state():
         "history_summary": history_summary(),
         "recent_events": events,
         "live_json_files": list_live_json(),
+        "system_map": get_current_system_map(include_full=False),
     }
 
 
@@ -129,6 +131,40 @@ def get_history_summary() -> dict:
 def get_raw_history_page(before_id: int = 0, limit: int = 500) -> dict:
     """Page through every raw journal event, newest first."""
     return get_event_page(None if before_id <= 0 else before_id, limit)
+
+
+@mcp.tool()
+def get_current_system_map_simple() -> str:
+    """Get the current system as a compact body tree with body types and arrival distances."""
+    result = get_current_system_map(include_full=False)
+    return result["simple_text"] if result else "No saved current-system map is available."
+
+
+@mcp.tool()
+def get_current_system_map_full() -> str:
+    """Get the current system as a detailed tree containing all saved scan and signal data."""
+    result = get_current_system_map(include_full=True)
+    return result["full_text"] if result else "No saved current-system map is available."
+
+
+@mcp.tool()
+def list_saved_system_maps(query: str = "", limit: int = 100) -> list:
+    """List saved historical system maps, optionally filtering by part of a system name."""
+    return list_system_maps(query, limit)
+
+
+@mcp.tool()
+def get_saved_system_map_simple(system: str) -> str:
+    """Get a compact saved map by exact system name or numeric SystemAddress."""
+    result = get_system_map(system, include_full=False)
+    return result["simple_text"] if result else f"No saved system map found for: {system}"
+
+
+@mcp.tool()
+def get_saved_system_map_full(system: str) -> str:
+    """Get a detailed saved map by exact system name or numeric SystemAddress."""
+    result = get_system_map(system, include_full=True)
+    return result["full_text"] if result else f"No saved system map found for: {system}"
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from history_store import history_summary, latest_event, recent_events, search_events, sync_journals
+from system_map_store import get_current_system_map, get_system_map, list_system_maps
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -73,6 +74,7 @@ def build_state():
         "live_files": live_files,
         "history_summary": history_summary(),
         "recent_events": events,
+        "system_map": get_current_system_map(include_full=False),
     }
 
     replay = []
@@ -188,6 +190,28 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 limit = 200
             return send_json(self, search_events(query, event, start, end, limit))
+
+        if path == "/system-map/simple":
+            return send_json(self, get_current_system_map(include_full=False) or {})
+
+        if path == "/system-map/full":
+            return send_json(self, get_current_system_map(include_full=True) or {})
+
+        if path == "/system-maps":
+            query = qs.get("q", [""])[0]
+            try:
+                limit = int(qs.get("limit", ["100"])[0])
+            except Exception:
+                limit = 100
+            return send_json(self, list_system_maps(query, limit))
+
+        if path == "/system-maps/get":
+            identifier = qs.get("system", [""])[0]
+            include_full = qs.get("detail", ["simple"])[0].lower() == "full"
+            result = get_system_map(identifier, include_full)
+            if result is None:
+                return send_json(self, {"error": "Saved system map not found."}, 404)
+            return send_json(self, result)
 
         if path == "/":
             html = """<!DOCTYPE html><html><head><meta charset='UTF-8'><title>EDGPT Full Context</title>
