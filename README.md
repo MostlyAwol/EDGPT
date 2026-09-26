@@ -175,9 +175,10 @@ Read `SECURITY.md` before publishing logs or enabling Full Context GitHub Relay.
 
 ## Building from source
 
-Developer-oriented architecture and extension notes are available in
-[`docs/PROGRAM_DESIGN.md`](docs/PROGRAM_DESIGN.md) and
-[`docs/EXTENDING_EDGPT.md`](docs/EXTENDING_EDGPT.md).
+Developer-oriented architecture, extension notes, and the suggested roadmap
+are available in [`docs/PROGRAM_DESIGN.md`](docs/PROGRAM_DESIGN.md),
+[`docs/EXTENDING_EDGPT.md`](docs/EXTENDING_EDGPT.md), and
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 Developer requirements:
 

@@ -414,7 +414,7 @@ These are facts to account for, not necessarily bugs that must all be fixed:
 
 When returning to the repository later:
 
-1. Read this file and `docs/EXTENDING_EDGPT.md`.
+1. Read this file, `docs/EXTENDING_EDGPT.md`, and `docs/ROADMAP.md`.
 2. Run `git status --short` before editing; preserve user changes.
 3. Read the relevant module from the source map, plus its direct data producer
    and consumer.
