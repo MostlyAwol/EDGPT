@@ -154,6 +154,10 @@ Read `SECURITY.md` before publishing logs or enabling Full Context GitHub Relay.
 
 ## Building from source
 
+Developer-oriented architecture and extension notes are available in
+[`docs/PROGRAM_DESIGN.md`](docs/PROGRAM_DESIGN.md) and
+[`docs/EXTENDING_EDGPT.md`](docs/EXTENDING_EDGPT.md).
+
 Developer requirements:
 
 - Windows 10/11 x64
