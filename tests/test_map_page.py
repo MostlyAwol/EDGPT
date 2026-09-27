@@ -9,6 +9,9 @@ from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bin"))
 import server
+from map_page import render_map_page
+from system_map import apply_event, new_system_map
+from system_map_store import _result
 
 
 class MapPageTests(unittest.TestCase):
@@ -49,7 +52,7 @@ class MapPageTests(unittest.TestCase):
     def test_saved_system_preserves_large_id(self):
         with patch.object(server, "get_system_map", return_value={"system_name": "Saved"}) as lookup:
             code, _, body = self.get("/map?system=12345678901234567")
-        lookup.assert_called_once_with("12345678901234567")
+        lookup.assert_called_once_with("12345678901234567", include_model=True)
         self.assertEqual(code, 200)
         self.assertIn("Saved system", body)
 
@@ -77,9 +80,45 @@ class MapPageTests(unittest.TestCase):
                 {"event": kind, "SystemAddress": 2, "StarSystem": "Latest"},
             ]), patch.object(server, "get_system_map", return_value=None) as lookup:
                 result = server.current_page_map()
-            lookup.assert_called_once_with("2")
+            lookup.assert_called_once_with("2", include_model=True)
             self.assertEqual(result["system_name"], "Latest")
             self.assertEqual(result["system_address"], 2)
+
+    def test_rich_body_details_units_nested_data_and_escaping(self):
+        model = new_system_map(123, "Rich system")
+        for index, event in enumerate([
+            {"event": "FSDJump", "StarSystem": "Rich system", "BodyID": 0, "Body": "Primary", "BodyType": "Star", "Population": 0},
+            {"event": "Scan", "BodyID": 0, "BodyName": "Primary", "StarType": "K", "StellarMass": 0.8},
+            {"event": "Scan", "BodyID": 1, "BodyName": "Planet <script>alert(1)</script>", "Parents": [{"Star": 0}],
+             "PlanetClass": "Icy body", "DistanceFromArrivalLS": 0, "Radius": 1000000, "SurfaceGravity": 9.80665,
+             "OrbitalPeriod": 86400, "RotationPeriod": -43200, "SurfacePressure": 101325, "MassEM": 0.0001,
+             "WasDiscovered": False, "Landable": True, "Atmosphere": "thin atmosphere", "TerraformState": "Terraformable",
+             "Rings": [{"Name": "Ring A", "RingClass": "eRingClass_Icy", "InnerRad": 2000000, "OuterRad": 3000000}],
+             "Materials": [{"Name": "iron", "Percent": 20}], "Composition": {"Ice": 0.9}, "FutureField": {"Nested": [False, 0, "<img>"]}},
+            {"event": "SAASignalsFound", "BodyID": 1, "Signals": [{"Type": "$SAA_SignalType_Biological;", "Count": 3}]},
+            {"event": "ScanOrganic", "BodyID": 1, "Species_Localised": "Test organism"},
+            {"event": "SAAScanComplete", "BodyID": 1, "ProbesUsed": 4},
+            {"event": "FSSSignalDiscovered", "SignalName": "Test station", "IsStation": True},
+        ], 1):
+            apply_event(model, {"SystemAddress": 123, **event}, index)
+        result = _result(model, include_model=True)
+        page = render_map_page(result)
+        for content in ("1,000 km", "1 g", "1 d", "-0.5 d", "1 atm", "0.0001 M⊕", "Biological × 3",
+                        "Landable", "Terraformable", "Surface mapped", "Undiscovered at scan", "Ring A", "iron 20 %",
+                        "Test organism", "Test station", "Future Field", "&lt;img&gt;", "Composition"):
+            self.assertIn(content, page)
+        self.assertNotIn("<script>alert(1)</script>", page)
+        self.assertLess(page.index('id="body-0"'), page.index('id="body-1"'))
+        self.assertNotIn("model", _result(model))
+
+    def test_cyclic_nodes_remain_visible_once(self):
+        model = new_system_map(123, "Cycle")
+        for body, parent in ((1, 2), (2, 1)):
+            apply_event(model, {"event": "Scan", "BodyID": body, "BodyName": f"Body {body}",
+                               "PlanetClass": "Rocky body", "Parents": [{"Planet": parent}]})
+        page = render_map_page(_result(model, include_model=True))
+        self.assertEqual(page.count('id="body-1"'), 1)
+        self.assertEqual(page.count('id="body-2"'), 1)
 
 
 if __name__ == "__main__":

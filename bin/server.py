@@ -30,8 +30,8 @@ def current_page_map():
     location = next((event for event in reversed(events)
                      if event.get("SystemAddress") is not None), None)
     if location is None:
-        return get_current_system_map()
-    return get_system_map(str(location["SystemAddress"])) or {
+        return get_current_system_map(include_model=True)
+    return get_system_map(str(location["SystemAddress"]), include_model=True) or {
         "system_name": location.get("StarSystem", "Unknown system"),
         "system_address": location["SystemAddress"],
         "last_updated": location.get("timestamp"),
@@ -99,7 +99,7 @@ class Handler(BaseHTTPRequestHandler):
                         or len(system) > 19 or int(system) > 9223372036854775807))):
                 code, message = 400, "Enter a numeric SystemAddress between 0 and 9223372036854775807."
             else:
-                result = current_page_map() if system is None else get_system_map(system)
+                result = current_page_map() if system is None else get_system_map(system, include_model=True)
                 if result is None and system is not None:
                     code, message = 404, "No saved map for this system ID. Only systems recorded in your journals are available."
             body = render_map_page(result, system=system, message=message).encode("utf-8")

@@ -174,17 +174,19 @@ def sync_system_maps(*, sync_history=True):
     return processed
 
 
-def _result(model, include_full=False):
+def _result(model, include_full=False, *, include_model=False):
     if not model:
         return None
     result = map_metadata(model)
     result["simple_text"] = render_simple_map(model)
     if include_full:
         result["full_text"] = render_full_map(model)
+    if include_model:
+        result["model"] = model
     return result
 
 
-def get_system_map(identifier, include_full=False):
+def get_system_map(identifier, include_full=False, *, include_model=False):
     sync_system_maps()
     with _connect() as conn:
         row = None
@@ -207,10 +209,10 @@ def get_system_map(identifier, include_full=False):
             model = json.loads(row["map_json"])
         except Exception:
             return None
-    return _result(model, include_full)
+    return _result(model, include_full, include_model=include_model)
 
 
-def get_current_system_map(include_full=False, *, sync_history=True):
+def get_current_system_map(include_full=False, *, sync_history=True, include_model=False):
     sync_system_maps(sync_history=sync_history)
     with _connect() as conn:
         address = _meta(conn, "current_system_address", "")
@@ -225,7 +227,7 @@ def get_current_system_map(include_full=False, *, sync_history=True):
             model = json.loads(row["map_json"])
         except Exception:
             return None
-    return _result(model, include_full)
+    return _result(model, include_full, include_model=include_model)
 
 
 def list_system_maps(query="", limit=100):

@@ -40,9 +40,19 @@ it usable as a browser page or an OBS browser source.
 
 Use `http://127.0.0.1:8080/map?system=123456789` to keep the page on a saved
 system by its numeric **SystemAddress**. You can also enter the ID on the page.
-The map shows the journal-recorded body hierarchy, scan status, and arrival
-distances; it is a schematic, not an orbital-position chart. Unvisited systems
-are unavailable. Existing JSON endpoints remain available separately.
+The map uses a dark, orange-accented hierarchy with body-type colors and summary
+counts. Body cards show recorded mass, radius, gravity, temperature, orbital and
+rotation periods, pressure, landability, terraforming and discovery status,
+surface mapping, signals, rings, and materials. Expand **All recorded details**
+for every retained body event, including composition, organics, Codex records,
+and nested scan data. System signals and complete system records appear below
+the hierarchy. Expanded sections stay open during live refreshes of the same
+system; **Expand all details** opens everything at once.
+
+Measurements on cards use readable units; detailed journal fields preserve their
+original values and units. This is a journal-based schematic, not an
+orbital-position chart. Only recorded information is available. Existing JSON
+endpoints remain available separately.
 
 ### 1. Install
 
