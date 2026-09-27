@@ -31,6 +31,19 @@ EDGPT preserves raw Frontier journal events so useful event types remain accessi
 
 ## Fastest setup
 
+### Live map page (Elite State)
+
+With the Elite State server running (default port 8080), open
+`http://127.0.0.1:8080/map` for a standalone HTML map of your current or last
+system. It follows location changes and refreshes every five seconds, making
+it usable as a browser page or an OBS browser source.
+
+Use `http://127.0.0.1:8080/map?system=123456789` to keep the page on a saved
+system by its numeric **SystemAddress**. You can also enter the ID on the page.
+The map shows the journal-recorded body hierarchy, scan status, and arrival
+distances; it is a schematic, not an orbital-position chart. Unvisited systems
+are unavailable. Existing JSON endpoints remain available separately.
+
 ### 1. Install
 
 Download and run `EDGPT-Setup-0.2.0-beta.exe` from Releases.

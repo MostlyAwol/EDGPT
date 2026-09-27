@@ -6,8 +6,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from history_store import history_summary, recent_events, search_events
+from history_store import history_summary, recent_events, search_events, latest_state_events
 from current_state import build_state
+from map_page import render_map_page
 from system_map_store import get_current_system_map, get_system_map, list_system_maps
 from session_store import get_current_session_summary, get_game_session, list_game_sessions
 
@@ -22,6 +23,20 @@ PORT = int(os.environ.get("EDGPT_STATE_PORT", "8080"))
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
+
+
+def current_page_map():
+    events = latest_state_events(("Location", "FSDJump", "CarrierJump"))
+    location = next((event for event in reversed(events)
+                     if event.get("SystemAddress") is not None), None)
+    if location is None:
+        return get_current_system_map()
+    return get_system_map(str(location["SystemAddress"])) or {
+        "system_name": location.get("StarSystem", "Unknown system"),
+        "system_address": location["SystemAddress"],
+        "last_updated": location.get("timestamp"),
+        "simple_text": "No bodies recorded for this system yet. Scan bodies to populate the map.",
+    }
 
 
 def parse_state_options(query):
@@ -75,6 +90,26 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         qs = parse_qs(parsed.query, keep_blank_values=True)
+
+        if path == "/map":
+            system = qs.get("system", [None])[0]
+            code, message, result = 200, None, None
+            if (any(key != "system" or len(values) != 1 for key, values in qs.items())
+                    or (system is not None and (not system.isascii() or not system.isdecimal()
+                        or len(system) > 19 or int(system) > 9223372036854775807))):
+                code, message = 400, "Enter a numeric SystemAddress between 0 and 9223372036854775807."
+            else:
+                result = current_page_map() if system is None else get_system_map(system)
+                if result is None and system is not None:
+                    code, message = 404, "No saved map for this system ID. Only systems recorded in your journals are available."
+            body = render_map_page(result, system=system, message=message).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
 
         if path == "/health":
             return send_json(self, health())
@@ -155,7 +190,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/":
             html = """<!DOCTYPE html><html><head><meta charset='UTF-8'><title>EDGPT Full Context</title>
 <style>body{background:#111;color:#eee;font-family:Consolas,monospace;margin:30px}h1{color:#ff9500}pre{background:#191919;padding:20px;border-radius:8px;white-space:pre-wrap}</style></head>
-<body><h1>EDGPT Full Context</h1><p>Current state + complete indexed journal history.</p><pre id='data'>Loading...</pre>
+<body><h1>EDGPT Full Context</h1><p>Current state + complete indexed journal history.</p><p><a href='/map' style='color:#ff9500'>Live system map</a></p><pre id='data'>Loading...</pre>
 <script>async function update(){try{const r=await fetch('/state?time='+Date.now());const d=await r.json();document.getElementById('data').textContent=JSON.stringify(d,null,2)}catch(e){document.getElementById('data').textContent='ERROR: '+e}}update();setInterval(update,5000)</script></body></html>"""
             body = html.encode("utf-8")
             self.send_response(200)
