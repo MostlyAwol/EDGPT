@@ -2,13 +2,17 @@
 
 ## Unreleased
 
+- Added shared human-readable decoding for `Status.json` `Flags` and `Flags2`
+  across HTTP and MCP while retaining raw integers and exposing unknown bits.
 - Added persistent simple and full text system maps built from exploration,
   FSS, SAA, barycentre, organic, and signal journal events.
 - Added historical map backfill and per-system merging so repeat visits retain
   scan data that Elite does not emit again.
 - Added current/historical system-map HTTP endpoints and MCP tools.
-- Added independent `/state` controls for suppressing `history_summary` and
-  selecting zero to 5,000 returned `recent_events`.
+- Made `/state` compact by default, with independent opt-ins for
+  `history_summary`, zero to 5,000 `recent_events`, raw `loadout`, and complete
+  `live_files`; invalid option values now return HTTP 400.
+- Added HTTP contract tests for compact and full state-response profiles.
 
 ## 0.2.0-beta
 

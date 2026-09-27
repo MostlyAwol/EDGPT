@@ -212,21 +212,30 @@ The state HTTP server's `build_state()` is the richest normalized view. It:
 5. lets `Status.json` override rapidly changing coordinates, heading, altitude,
    and fuel values.
 
+All `Status.json` reads also pass through `bin/status_flags.py`. It preserves
+the numeric `Flags` and `Flags2` values and adds deterministic `FlagsDecoded`
+and `Flags2Decoded` name lists. Corresponding `FlagsUnknownBits` fields expose
+unrecognized active bit positions. Definitions are normalized from section 14
+of Frontier's Journal Manual v32 and shared by HTTP and MCP.
+
 Location falls back from `Location` to `FSDJump` to `CarrierJump`. Ship identity
 comes from `LoadGame`/`Loadout`. Docking state is reconstructed from location
 and dock/undock events. Fuel is derived from loadout capacity, jump/scoop
 events, and current status.
 
-The output intentionally includes both convenient normalized fields and raw
-sources (`loadout`, `live_files`, `recent_events`). This is a useful design
-principle for future changes: add conveniences without discarding upstream
-data the AI may understand better than EDGPT does.
+The default output contains convenient normalized fields while omitting the
+large raw `loadout`, `live_files`, `recent_events`, and `history_summary`
+fields. Callers can independently opt into each raw field. Internally, state
+derivation still uses the loadout, live status/route, and at least 250 recent
+events. This keeps the default LLM context small without making normalized
+state less accurate or discarding access to upstream data.
 
 The MCP server has a smaller `build_current_state()` rather than importing the
 HTTP server because importing `server.py` would immediately start its blocking
 server. The two representations overlap but are not identical:
 
-- HTTP `/state` returns normalized fields and all decoded live files.
+- HTTP `/state` returns normalized fields with independently selectable raw
+  history, loadout, and live-file context.
 - MCP `get_elite_state` returns the latest location event, loadout, status,
   route, history summary, recent events, and live filenames.
 
@@ -278,7 +287,7 @@ loopback only.
 | Endpoint | Result |
 | --- | --- |
 | `GET /` | Dashboard that refreshes `/state` every five seconds |
-| `GET /state` | Normalized current state plus raw context; accepts `history_summary` and `recent_events` options |
+| `GET /state` | Compact normalized state; accepts independent `history_summary`, `recent_events`, `loadout`, and `live_files` options |
 | `GET /history/summary` | Database/history statistics |
 | `GET /history/recent?count=250` | Recent raw events |
 | `GET /history/search?q=&event=&start=&end=&limit=` | Filtered raw events |
@@ -329,6 +338,9 @@ Every two seconds it fetches local `/state`, recursively removes volatile
 timestamp keys, hashes the stable value, and remembers changes. It pushes at
 most once every ten seconds. Every five minutes it also scans journals and live
 JSON files and mirrors changed files by SHA-256.
+
+The relay opts into all four optional `/state` fields to retain its existing
+Full Context behavior even though ordinary `/state` requests are compact.
 
 It writes:
 
@@ -386,8 +398,6 @@ data unnecessarily.
 These are facts to account for, not necessarily bugs that must all be fixed:
 
 - The project currently has no automated test suite.
-- `server.py` starts serving at import time, which makes isolated unit testing
-  and reuse harder.
 - Current-state logic is duplicated/uneven between HTTP and MCP.
 - Location fallback prefers the newest `Location` event whenever any exists,
   then `FSDJump`, then `CarrierJump`; it does not directly compare timestamps

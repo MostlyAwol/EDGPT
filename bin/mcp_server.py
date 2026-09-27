@@ -11,6 +11,7 @@ from history_store import (
     search_events,
     sync_journals,
 )
+from status_flags import decode_status_flags
 from system_map_store import get_current_system_map, get_system_map, list_system_maps
 
 DEFAULT_ELITE_DIR = Path.home() / "Saved Games" / "Frontier Developments" / "Elite Dangerous"
@@ -25,7 +26,8 @@ def read_json_file(name):
         return None
     try:
         with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
+            value = json.load(f)
+            return decode_status_flags(value) if name.lower() == "status.json" else value
     except Exception:
         return None
 
@@ -77,7 +79,7 @@ def get_navroute() -> dict:
 
 @mcp.tool()
 def get_status() -> dict:
-    """Get the latest Status.json data."""
+    """Get Status.json with raw numeric flags plus decoded names and unknown bit positions."""
     return read_json_file("Status.json") or {}
 
 

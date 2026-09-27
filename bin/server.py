@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from history_store import history_summary, latest_event, recent_events, search_events, sync_journals
+from status_flags import decode_status_flags
 from system_map_store import get_current_system_map, get_system_map, list_system_maps
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -18,6 +19,9 @@ DEFAULT_ELITE_DIR = Path.home() / "Saved Games" / "Frontier Developments" / "Eli
 ELITE_DIR = Path(os.environ.get("ELITE_JOURNAL_DIR", str(DEFAULT_ELITE_DIR))).expanduser()
 PORT = int(os.environ.get("EDGPT_STATE_PORT", "8080"))
 
+TRUE_VALUES = {"1", "true", "yes", "on"}
+FALSE_VALUES = {"0", "false", "no", "off"}
+
 
 def read_json_file(filename):
     path = ELITE_DIR / filename
@@ -25,7 +29,8 @@ def read_json_file(filename):
         return None
     try:
         with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
+            value = json.load(f)
+            return decode_status_flags(value) if filename.lower() == "status.json" else value
     except Exception:
         return None
 
@@ -42,12 +47,60 @@ def all_live_json_files():
     return result
 
 
-def build_state(include_history_summary=True, recent_event_count=250):
+def parse_state_options(query):
+    """Parse strict, independent /state output-selection options."""
+
+    def optional_bool(name):
+        if name not in query:
+            return False
+        values = query[name]
+        if len(values) != 1:
+            raise ValueError(f"{name} must be specified once.")
+        value = values[0].strip().lower()
+        if value in TRUE_VALUES:
+            return True
+        if value in FALSE_VALUES:
+            return False
+        raise ValueError(f"{name} must be true or false.")
+
+    recent_event_count = None
+    if "recent_events" in query:
+        values = query["recent_events"]
+        if len(values) != 1:
+            raise ValueError("recent_events must be specified once.")
+        try:
+            recent_event_count = int(values[0].strip())
+        except (TypeError, ValueError):
+            raise ValueError("recent_events must be an integer from 0 to 5000.") from None
+        if not 0 <= recent_event_count <= 5000:
+            raise ValueError("recent_events must be an integer from 0 to 5000.")
+
+    return {
+        "include_history_summary": optional_bool("history_summary"),
+        "recent_event_count": recent_event_count,
+        "include_loadout": optional_bool("loadout"),
+        "include_live_files": optional_bool("live_files"),
+    }
+
+
+def build_state(
+    include_history_summary=False,
+    recent_event_count=None,
+    include_loadout=False,
+    include_live_files=False,
+):
     sync_journals()
-    live_files = all_live_json_files()
-    recent_event_count = max(0, min(int(recent_event_count), 5000))
-    replay_events = recent_events(max(250, recent_event_count))
-    exposed_events = replay_events[-recent_event_count:] if recent_event_count else []
+    if include_live_files:
+        live_files = all_live_json_files()
+        status_file = live_files.get("Status.json")
+        navroute_file = live_files.get("NavRoute.json")
+    else:
+        live_files = None
+        status_file = read_json_file("Status.json")
+        navroute_file = read_json_file("NavRoute.json")
+
+    requested_event_count = int(recent_event_count or 0)
+    replay_events = recent_events(max(250, requested_event_count))
 
     loadout = latest_event("Loadout")
     location_event = latest_event("Location") or latest_event("FSDJump") or latest_event("CarrierJump")
@@ -70,15 +123,20 @@ def build_state(include_history_summary=True, recent_event_count=250):
         "jump_range": None,
         "fuel": {"main": None, "reservoir": None, "capacity": None},
         "location": {"latitude": None, "longitude": None, "altitude": None, "heading": None},
-        "status": live_files.get("Status.json"),
-        "navroute": live_files.get("NavRoute.json"),
-        "loadout": loadout,
-        "live_files": live_files,
-        "recent_events": exposed_events,
+        "status": status_file,
+        "navroute": navroute_file,
         "system_map": get_current_system_map(include_full=False),
     }
     if include_history_summary:
         state["history_summary"] = history_summary()
+    if recent_event_count is not None:
+        state["recent_events"] = (
+            replay_events[-requested_event_count:] if requested_event_count else []
+        )
+    if include_loadout:
+        state["loadout"] = loadout
+    if include_live_files:
+        state["live_files"] = live_files
 
     replay = []
     for candidate in (location_event, load_game, loadout):
@@ -168,16 +226,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
-        qs = parse_qs(parsed.query)
+        qs = parse_qs(parsed.query, keep_blank_values=True)
 
         if path == "/state":
-            history_value = qs.get("history_summary", ["true"])[0].strip().lower()
-            include_history = history_value not in {"0", "false", "no", "off"}
             try:
-                event_count = int(qs.get("recent_events", ["250"])[0])
-            except (TypeError, ValueError):
-                event_count = 250
-            return send_json(self, build_state(include_history, event_count))
+                options = parse_state_options(qs)
+            except ValueError as exc:
+                return send_json(self, {"error": str(exc)}, 400)
+            return send_json(self, build_state(**options))
 
         if path == "/history/summary":
             return send_json(self, history_summary())
@@ -242,17 +298,24 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
-print("\n======================================")
-print(" EDGPT FULL CONTEXT SERVER")
-print("======================================\n")
-print("Elite folder:")
-print(ELITE_DIR)
-print("\nIndexing all journals...")
-added = sync_journals()
-summary = history_summary()
-print(f"Indexed: {summary['events_indexed']} events across {summary['journal_files_indexed']} journals (+{added} new)")
-print(f"\nDashboard: http://localhost:{PORT}")
-print(f"Raw API:   http://localhost:{PORT}/state")
-print(f"History:   http://localhost:{PORT}/history/summary\n")
+def main():
+    print("\n======================================")
+    print(" EDGPT FULL CONTEXT SERVER")
+    print("======================================\n")
+    print("Elite folder:")
+    print(ELITE_DIR)
+    print("\nIndexing all journals...")
+    added = sync_journals()
+    summary = history_summary()
+    print(
+        f"Indexed: {summary['events_indexed']} events across "
+        f"{summary['journal_files_indexed']} journals (+{added} new)"
+    )
+    print(f"\nDashboard: http://localhost:{PORT}")
+    print(f"Raw API:   http://localhost:{PORT}/state")
+    print(f"History:   http://localhost:{PORT}/history/summary\n")
+    HTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
 
-HTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+
+if __name__ == "__main__":
+    main()

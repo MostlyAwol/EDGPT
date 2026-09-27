@@ -24,6 +24,12 @@ the previously completed items.
 
 ## 1. Lean and configurable `/state` defaults
 
+**Status: completed on 2026-09-26.** The four fields are independently
+selectable, strict invalid values return HTTP 400, the relay explicitly opts
+into the full payload, and committed HTTP contract tests cover default,
+individual, combined, zero-event, false, and invalid requests. Capabilities
+registration remains part of item 3 because that interface does not exist yet.
+
 ### Goal
 
 Make the default `/state` response compact enough for routine LLM context while
@@ -95,6 +101,12 @@ change.
 
 ## 2. Human-readable `Status.json` flags
 
+**Status: completed on 2026-09-27.** HTTP and MCP status reads now share a
+single decoder, retain the original integers, list documented active flags in
+bit order, and report unknown active bit positions explicitly. Tests cover all
+documented bits, combinations, zero/missing/malformed values, unknown high
+bits, and Frontier's published `16842765` example.
+
 ### Goal
 
 Decode the numeric `Flags` and `Flags2` bitfields into stable human-readable
@@ -107,15 +119,17 @@ Keep Frontier's raw fields and add decoded fields alongside them:
 ```json
 {
   "Flags": 16842765,
-  "FlagsDecoded": ["Docked", "ShieldsUp", "LandingGearDown"],
+  "FlagsDecoded": ["Docked", "LandingGearDown", "ShieldsUp", "FsdMassLocked", "InMainShip"],
+  "FlagsUnknownBits": [],
   "Flags2": 5,
-  "Flags2Decoded": ["OnFoot", "OnFootInStation"]
+  "Flags2Decoded": ["OnFoot", "InMulticrew"],
+  "Flags2UnknownBits": []
 }
 ```
 
-The example names above illustrate the shape only. Implementation must derive
-the authoritative bit names and bit positions from the current Status file
-documentation and verify them against real fixtures before committing them.
+Names and positions follow section 14 of Frontier's
+[Journal Manual v32](https://hosting.zaonce.net/community/journal/v32/Journal_Manual-v32.pdf).
+EDGPT normalizes the documented labels into stable PascalCase identifiers.
 
 ### Design requirements
 
