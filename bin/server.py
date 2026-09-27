@@ -289,8 +289,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/":
             html = """<!DOCTYPE html><html><head><meta charset='UTF-8'><title>EDGPT Full Context</title>
 <style>body{background:#111;color:#eee;font-family:Consolas,monospace;margin:30px}h1{color:#ff9500}pre{background:#191919;padding:20px;border-radius:8px;white-space:pre-wrap}</style></head>
-<body><h1>EDGPT Full Context</h1><p>Current state + complete indexed journal history.</p><pre id='health'>Checking health...</pre><pre id='data'>Loading...</pre>
-<script>async function update(){try{const h=await(await fetch('/health')).json();document.getElementById('health').textContent=JSON.stringify(h,null,2);const r=await fetch('/state?time='+Date.now());const d=await r.json();document.getElementById('data').textContent=JSON.stringify(d,null,2)}catch(e){document.getElementById('data').textContent='ERROR: '+e}}update();setInterval(update,5000)</script></body></html>"""
+<body><h1>EDGPT Full Context</h1><p>Current state + complete indexed journal history.</p><pre id='data'>Loading...</pre>
+<script>async function update(){try{const r=await fetch('/state?time='+Date.now());const d=await r.json();document.getElementById('data').textContent=JSON.stringify(d,null,2)}catch(e){document.getElementById('data').textContent='ERROR: '+e}}update();setInterval(update,5000)</script></body></html>"""
             body = html.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")

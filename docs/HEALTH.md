@@ -34,7 +34,8 @@ ready solely because its child process exists.
 
 The launcher polls this contract every ten seconds in a background thread;
 CHECK logs component results and the UI retains the last actionable issue.
-The local dashboard also displays health. Private journal paths, commander
+The local dashboard displays current state only; health is available at `/health`.
+Private journal paths, commander
 names, raw events, tokens, repository names and exception text are excluded.
 The directory is represented by flags rather than its private path.
 
