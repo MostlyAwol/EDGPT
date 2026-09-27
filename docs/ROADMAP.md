@@ -1,9 +1,9 @@
 # EDGPT Suggested Implementation Roadmap
 
 This document records the agreed direction for future EDGPT development. It is
-ordered deliberately: first make the bridge observable and safe to change,
-then add specialized state models, and finally add real-time and extension
-capabilities.
+ordered deliberately: first make the default state payload focused and easier
+to understand, then make the bridge observable and safe to change, add
+specialized state models, and finally add real-time and extension capabilities.
 
 The roadmap is planning guidance rather than a promise that every detail must
 be implemented exactly as written. Before starting an item, compare these notes
@@ -22,7 +22,133 @@ the previously completed items.
 - Do not weaken current-state accuracy merely to reduce response payload size.
 - Add fixtures and automated checks with every new state model.
 
-## 1. Health, capabilities, and real diagnostics
+## 1. Lean and configurable `/state` defaults
+
+### Goal
+
+Make the default `/state` response compact enough for routine LLM context while
+retaining explicit, independent ways to request every currently available
+field.
+
+### New default response behavior
+
+The following fields should not be returned by a plain `GET /state`:
+
+- `history_summary`;
+- `recent_events`;
+- `loadout`; and
+- `live_files`.
+
+This is an output-selection change only. EDGPT may still use journal replay,
+the latest loadout, and live files internally to derive accurate normalized
+fields such as current system, ship, jump range, fuel, location, status, and
+route.
+
+### Proposed independent options
+
+```text
+GET /state?history_summary=true
+GET /state?recent_events=25
+GET /state?loadout=true
+GET /state?live_files=true
+GET /state?history_summary=true&recent_events=100&loadout=true&live_files=true
+```
+
+Proposed semantics:
+
+- `history_summary` defaults to `false`; `true` includes the field.
+- `recent_events` defaults to `0`; a value from 1 to 5,000 includes exactly
+  that many recent events, subject to available history.
+- When `recent_events` is absent, omit the field. When it is explicitly set to
+  `0`, include `"recent_events": []` so clients can distinguish the request.
+- `loadout` defaults to `false`; `true` includes the complete raw loadout.
+- `live_files` defaults to `false`; `true` includes the decoded collection of
+  all live JSON sidecars.
+- Invalid values should produce a documented HTTP 400 response rather than
+  silently selecting an unexpected payload.
+
+The individual history, loadout, status, route, live-file, and system-map HTTP
+endpoints/MCP tools remain available. Existing query options should be migrated
+deliberately, with the changed defaults called out as an API compatibility
+change.
+
+### Efficiency expectations
+
+- Do not serialize omitted fields.
+- Avoid computing `history_summary` when it was not requested.
+- Read the full loadout/live-file collection only when needed for internal
+  derivation or explicitly requested output.
+- Continue using an internal event replay window even when `recent_events` is
+  omitted, so state accuracy is unchanged.
+
+### Completion criteria
+
+- Plain `/state` omits all four fields.
+- Each field can be enabled independently.
+- Enabling one field does not implicitly enable another.
+- A request for `recent_events=0` returns the documented empty list while a
+  plain request omits the field.
+- Combined options return the requested fields and nothing extra.
+- Default and full-response HTTP contract tests are committed.
+- README, capabilities, changelog, and API compatibility notes describe the
+  new defaults.
+
+## 2. Human-readable `Status.json` flags
+
+### Goal
+
+Decode the numeric `Flags` and `Flags2` bitfields into stable human-readable
+names while preserving the original numeric values exactly.
+
+### Proposed output
+
+Keep Frontier's raw fields and add decoded fields alongside them:
+
+```json
+{
+  "Flags": 16842765,
+  "FlagsDecoded": ["Docked", "ShieldsUp", "LandingGearDown"],
+  "Flags2": 5,
+  "Flags2Decoded": ["OnFoot", "OnFootInStation"]
+}
+```
+
+The example names above illustrate the shape only. Implementation must derive
+the authoritative bit names and bit positions from the current Status file
+documentation and verify them against real fixtures before committing them.
+
+### Design requirements
+
+- Preserve `Flags` and `Flags2` as integers for lossless compatibility.
+- Represent decoded active flags in deterministic bit order.
+- Use stable, unlocalized machine-readable names suitable for LLMs and API
+  clients.
+- Do not guess at unknown/new bits. Preserve the raw integer and optionally
+  expose unknown bit positions explicitly.
+- Treat a missing `Flags2` as unavailable, not as a zero value.
+- Centralize flag definitions in one tested module rather than scattering bit
+  masks through HTTP and MCP code.
+- Make HTTP and MCP status output use the same decoder.
+
+### Testing requirements
+
+- zero flags;
+- every documented individual bit;
+- representative combinations;
+- high/unknown bits;
+- missing `Flags` or `Flags2`;
+- values observed in sanitized real `Status.json` fixtures; and
+- confirmation that raw integers are unchanged.
+
+### Completion criteria
+
+- The status object within `/state` and MCP `get_status` agree.
+- Both decoded lists are human readable and deterministically ordered.
+- Unknown bits cannot silently disappear.
+- Flag-definition provenance/version is documented.
+- Existing consumers of numeric `Flags` and `Flags2` remain compatible.
+
+## 3. Health, capabilities, and real diagnostics
 
 ### Goal
 
@@ -78,7 +204,7 @@ process is not necessarily a healthy service.
 - Tests cover ready, missing journal directory, unavailable database, stale
   journal, and optional-component failure cases.
 
-## 2. Shared state construction and automated test foundation
+## 4. Shared state construction and automated test foundation
 
 ### Goal
 
@@ -113,7 +239,7 @@ verify.
 - Tests run from one documented command without live commander data.
 - Existing history and system-map behavior remains compatible.
 
-## 3. Session and activity summaries
+## 5. Session and activity summaries
 
 ### Goal
 
@@ -164,7 +290,7 @@ history event watermark and model schema version.
 - A compact summary stays useful without raw-event expansion.
 - Important totals link back to source event ranges for investigation.
 
-## 4. Mission tracking
+## 6. Mission tracking
 
 ### Goal
 
@@ -217,7 +343,7 @@ missed events and use journal history to retain completed mission records.
 - Expiry calculations clearly state their timestamp basis.
 - Missing optional details degrade gracefully.
 
-## 5. Materials and engineering readiness
+## 7. Materials and engineering readiness
 
 ### Goal
 
@@ -263,7 +389,7 @@ material-trader conversions separately.
 - All quantities include provenance/update time.
 - Recipe-data version is visible through capabilities/health.
 
-## 6. Exploration annotations and recommendations
+## 8. Exploration annotations and recommendations
 
 ### Goal
 
@@ -306,7 +432,7 @@ MCP: get_saved_system_exploration
 - Recommendation rules are deterministic and tested.
 - Full raw event access remains available for verification.
 
-## 7. Route and expedition tracking
+## 9. Route and expedition tracking
 
 ### Goal
 
@@ -356,7 +482,7 @@ or notes as a side effect of a read operation.
 - Saved expeditions survive restarts and can be exported/imported.
 - Risk warnings state the observed data and rule that triggered them.
 
-## 8. Colonisation tracking
+## 10. Colonisation tracking
 
 ### Goal
 
@@ -403,7 +529,7 @@ timestamps and source attribution.
 - Restart and missed-event reconciliation are defined.
 - Private project/activity data follows existing relay/privacy controls.
 
-## 9. Streaming events and alerts
+## 11. Streaming events and alerts
 
 ### Goal
 
@@ -443,7 +569,7 @@ through capabilities. Keep raw event streaming and derived alerts distinct.
 - Filters reduce output without changing stored state.
 - No remote listener is enabled by default; loopback remains the default.
 
-## 10. Extension/state-provider framework
+## 12. Extension/state-provider framework
 
 ### Goal
 
@@ -509,4 +635,3 @@ Each implementation should include:
 - [EDDiscovery releases](https://github.com/EDDiscovery/EDDiscovery/releases)
 - [EDMarketConnector plugin documentation](https://github.com/EDCD/EDMarketConnector/blob/main/PLUGINS.md)
 - [EDDN schema guidance](https://github.com/EDCD/EDDN/blob/master/schemas/README-EDDN-schemas.md)
-
