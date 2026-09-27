@@ -11,8 +11,8 @@ from ctypes import wintypes
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog
 
-APP_NAME = "EDGPT"
-APP_VERSION = "0.2.0-beta"
+APP_NAME = "EDGPT (MostlyAwol)"
+APP_VERSION = "0.5.0-beta"
 MCP_URL = "http://127.0.0.1:8000/mcp"
 STATE_URL = "http://127.0.0.1:8080/state"
 
