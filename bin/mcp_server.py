@@ -12,6 +12,7 @@ from history_store import (
 )
 from current_state import build_state, read_json_file, list_live_json
 from system_map_store import get_current_system_map, get_system_map, list_system_maps
+import session_store
 
 mcp = FastMCP("Elite Dangerous Full Context", stateless_http=True, json_response=True,
               host="127.0.0.1", port=int(os.environ.get("EDGPT_MCP_PORT", "8000")))
@@ -32,6 +33,27 @@ def get_edgpt_health() -> dict:
 def get_edgpt_capabilities() -> dict:
     """Discover API versions, endpoints, tools, state profiles, limits and enabled integrations."""
     return capabilities()
+
+
+@mcp.tool()
+def get_current_session_summary() -> dict:
+    """Summarize the latest play session, including after shutdown; empty if unavailable."""
+    return session_store.get_current_session_summary()
+
+
+@mcp.tool()
+def list_game_sessions(limit: int = 20, before: int = 0, start_time: str = "", end_time: str = "") -> dict:
+    """Page session summaries newest first (limit 1-100); use next_before as before.
+
+    Optional inclusive start-time filters require ISO 8601 timestamps with zones.
+    """
+    return session_store.list_game_sessions(limit, before, start_time, end_time)
+
+
+@mcp.tool()
+def get_game_session(session_id: str) -> dict:
+    """Get a saved session's activities, text summary and source ID ranges; empty if not found."""
+    return session_store.get_game_session(session_id)
 
 
 @mcp.tool()

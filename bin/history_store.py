@@ -374,6 +374,33 @@ def history_generation():
         return conn.execute("SELECT value FROM history_meta WHERE key='generation'").fetchone()[0]
 
 
+@contextmanager
+def session_event_stream(after_id=0, generation="", last_source=None):
+    """Consistent, bounded-memory replay in journal/line order (no ingestion).
+
+    Late imports or edits to earlier journals require derived sessions to rebuild.
+    The existing unique source index supplies replay order without a new schema.
+    """
+    with _connect() as conn:
+        conn.execute("BEGIN")
+        current_generation = conn.execute(
+            "SELECT value FROM history_meta WHERE key='generation'"
+        ).fetchone()[0]
+        high = conn.execute("SELECT COALESCE(MAX(id),0) FROM events").fetchone()[0]
+        earliest = conn.execute(
+            "SELECT journal_file,line_no FROM events WHERE id>? "
+            "ORDER BY journal_file,line_no LIMIT 1", (after_id,)
+        ).fetchone()
+        rebuild = (generation != current_generation or after_id > high or
+                   (earliest is not None and last_source is not None and
+                    tuple(earliest) <= tuple(last_source)))
+        rows = conn.execute(
+            "SELECT id,journal_file,line_no,raw_json FROM events WHERE id>? "
+            "ORDER BY journal_file,line_no", (0 if rebuild else after_id,)
+        )
+        yield current_generation, high, bool(rebuild), rows
+
+
 def latest_state_events(event_types, *, sync=True):
     """Latest event of each reducer type, in source order, beyond recent windows."""
     if sync:

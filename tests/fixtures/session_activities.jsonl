@@ -1,0 +1,25 @@
+{"timestamp":"2026-01-01T10:00:00Z","event":"FileHeader","part":1}
+{"timestamp":"2026-01-01T10:00:01Z","event":"Commander","Name":"Test Commander","FID":"F123"}
+{"timestamp":"2026-01-01T10:00:02Z","event":"LoadGame","Commander":"Test Commander","Ship":"SideWinder","ShipID":1,"GameMode":"Solo","Credits":100000}
+{"timestamp":"2026-01-01T10:00:03Z","event":"Location","StarSystem":"Sol","Docked":true,"StationName":"Test Port"}
+{"timestamp":"2026-01-01T10:01:00Z","event":"FSDJump","StarSystem":"Alpha","JumpDist":12.5}
+{"timestamp":"2026-01-01T10:02:00Z","event":"Docked","StarSystem":"Alpha","StationName":"Alpha Port"}
+{"timestamp":"2026-01-01T10:03:00Z","event":"ShipyardSwap","ShipType":"CobraMkIII","ShipID":2}
+{"timestamp":"2026-01-01T10:03:01Z","event":"Loadout","Ship":"CobraMkIII","ShipID":2}
+{"timestamp":"2026-01-01T10:04:00Z","event":"MissionAccepted","MissionID":123,"Name":"Test mission"}
+{"timestamp":"2026-01-01T10:05:00Z","event":"MarketBuy","Type":"gold","Count":2,"TotalCost":200}
+{"timestamp":"2026-01-01T10:06:00Z","event":"MarketSell","Type":"gold","Count":1,"TotalSale":150}
+{"timestamp":"2026-01-01T10:07:00Z","event":"MaterialCollected","Name":"iron","Category":"Raw","Count":3}
+{"timestamp":"2026-01-01T10:08:00Z","event":"MaterialTrade","Paid":{"Material":"iron","Category":"Raw","Quantity":2},"Received":{"Material":"nickel","Category":"Raw","Quantity":1}}
+{"timestamp":"2026-01-01T10:09:00Z","event":"Scan","BodyName":"Alpha 1","PlanetClass":"Water world","TerraformState":"Terraformable","WasDiscovered":false}
+{"timestamp":"2026-01-01T10:10:00Z","event":"SAAScanComplete","BodyName":"Alpha 1","BodyID":1}
+{"timestamp":"2026-01-01T10:11:00Z","event":"ScanOrganic","ScanType":"Log","Species":"Test Species","Body":1}
+{"timestamp":"2026-01-01T10:12:00Z","event":"ScanOrganic","ScanType":"Analyse","Species":"Test Species","Body":1}
+{"timestamp":"2026-01-01T10:13:00Z","event":"MissionCompleted","MissionID":123,"Reward":1000}
+{"timestamp":"2026-01-01T10:14:00Z","event":"MissionFailed","MissionID":124}
+{"timestamp":"2026-01-01T10:15:00Z","event":"Bounty","TotalReward":500}
+{"timestamp":"2026-01-01T10:16:00Z","event":"HullDamage","Health":0.2,"PlayerPilot":true}
+{"timestamp":"2026-01-01T10:17:00Z","event":"Died","KillerName":"Test NPC"}
+{"timestamp":"2026-01-01T10:18:00Z","event":"Resurrect","Option":"rebuy","Cost":300}
+{"timestamp":"2026-01-01T10:19:00Z","event":"RedeemVoucher","Amount":500,"Type":"bounty"}
+{"timestamp":"2026-01-01T10:20:00Z","event":"Shutdown"}

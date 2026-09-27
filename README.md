@@ -130,6 +130,9 @@ search_journal
 get_latest_journal_event
 get_history_summary
 get_raw_history_page
+get_current_session_summary
+list_game_sessions
+get_game_session
 get_current_system_map_simple
 get_current_system_map_full
 list_saved_system_maps
@@ -151,6 +154,12 @@ with types and arrival distances; full tools include all retained scan and
 signal event data.
 
 ## Full Context history
+
+Session summaries are available separately at `/sessions`, `/sessions/current`,
+and `/sessions/get?id=...`, with matching MCP tools listed above. They include
+compact activity totals, text, source event ranges and incomplete-data warnings.
+Lists support pagination and start-time filters. `/state` remains unchanged.
+See [session summary API and supported activities](docs/SESSIONS.md).
 
 On startup, EDGPT indexes historical Elite journals into a local SQLite database. The first run may take longer; later runs only add new events.
 

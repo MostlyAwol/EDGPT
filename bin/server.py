@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, urlparse
 from history_store import history_summary, recent_events, search_events
 from current_state import build_state
 from system_map_store import get_current_system_map, get_system_map, list_system_maps
+from session_store import get_current_session_summary, get_game_session, list_game_sessions
 
 if __name__ == "__main__" and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -88,6 +89,25 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as exc:
                 return send_json(self, {"error": str(exc)}, 400)
             return send_json(self, build_state(**options))
+
+        if path in ("/sessions", "/sessions/current", "/sessions/get"):
+            try:
+                allowed = {"/sessions": {"limit", "before", "start", "end"},
+                           "/sessions/current": set(), "/sessions/get": {"id"}}[path]
+                if any(key not in allowed or len(values) != 1 for key, values in qs.items()):
+                    raise ValueError("Unknown or repeated session query parameter.")
+                if path == "/sessions/current":
+                    result = get_current_session_summary()
+                elif path == "/sessions/get":
+                    result = get_game_session(qs.get("id", [""])[0])
+                    if not result:
+                        return send_json(self, {"error": "Session not found."}, 404)
+                else:
+                    result = list_game_sessions(qs.get("limit", ["20"])[0], qs.get("before", ["0"])[0],
+                                                qs.get("start", [""])[0], qs.get("end", [""])[0])
+            except ValueError as exc:
+                return send_json(self, {"error": str(exc)}, 400)
+            return send_json(self, result)
 
         if path == "/history/summary":
             return send_json(self, history_summary())

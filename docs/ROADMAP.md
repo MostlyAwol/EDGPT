@@ -266,6 +266,12 @@ verify.
 
 ## 5. Session and activity summaries
 
+**Status: completed on 2026-09-27.** Separate HTTP and MCP interfaces share
+a versioned, rebuildable session cache with bounded activity summaries, source
+event ranges, pagination and time filters. `/state` is unchanged. Boundary,
+restart, rebuild, activity and transport tests use synthetic journals. See
+[SESSIONS.md](SESSIONS.md) for supported events and incomplete-data semantics.
+
 ### Goal
 
 Give an LLM a compact description of what happened during the current or a

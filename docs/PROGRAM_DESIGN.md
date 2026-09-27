@@ -51,6 +51,8 @@ external AI client access to game data.
 | `bin/system_map.py` | Pure event-to-map merging, hierarchy inference, and text rendering | Imported library |
 | `bin/system_map_store.py` | Historical backfill and persistent per-system map cache | Imported library |
 | `bin/current_state.py` | Shared state builder, pure reducer, live-file loading | Used by HTTP and MCP |
+| `bin/session_summary.py` | Bounded session/activity reducer and text rendering | Imported library |
+| `bin/session_store.py` | Rebuildable session cache and shared queries; see [SESSIONS.md](SESSIONS.md) | Used by HTTP and MCP |
 | `bin/server.py` | State/history HTTP API, small local dashboard | Child process on `127.0.0.1:8080` |
 | `bin/mcp_server.py` | MCP tools over raw/live/current Elite data | Child process on `127.0.0.1:8000/mcp` |
 | `bin/uploader.py` | Optional state and raw-file mirror using GitHub Contents API | Child process |
@@ -106,6 +108,7 @@ The launcher creates `data/` beside the application and stores:
 | `data/openai_secret.bin` | Tunnel API key encrypted with Windows DPAPI |
 | `data/edgpt_history.db` | Indexed journal events and ingestion cursors |
 | `data/edgpt_system_maps.db` | Persistent maps keyed by Elite `SystemAddress` |
+| `data/edgpt_sessions.db` | Versioned session/activity cache, watermark and source provenance |
 
 The default config has four sections:
 

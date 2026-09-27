@@ -37,6 +37,7 @@ queries and live sidecars are not an atomic snapshot of a running game.
 | --- | --- | --- |
 | History index | `HISTORY_SCHEMA_VERSION = 1`, SQLite `user_version` | Existing unversioned EDGPT tables are adopted in place, retaining event IDs/cursors and adding generation metadata. Unsupported nonzero versions fail explicitly without deleting data. |
 | System maps | `MAP_SCHEMA_VERSION`, `map_meta.schema_version` | Model-version mismatch, history-generation mismatch, or a watermark beyond history clears the derived cache and replays raw history. |
+| Sessions | `SESSION_SCHEMA_VERSION = 1`, `session_meta.schema_version` | Model/history version mismatch, watermark regression or out-of-order source imports rebuild the session cache. See [SESSIONS.md](SESSIONS.md). |
 
 History receives a persistent generation identifier on initial schema adoption.
 It changes when a journal is truncated or replaced at the same size. A rebuilt

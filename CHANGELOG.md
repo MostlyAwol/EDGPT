@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added persistent session/activity summaries via `/sessions`,
+  `/sessions/current`, `/sessions/get` and three matching MCP tools, leaving
+  `/state` unchanged. Includes bounded details, source event ranges, time
+  filters, pagination, crash/rollover handling and automatic cache rebuilding.
+
 - Shared HTTP/MCP current-state builder and pure reducer; MCP preserves raw
   context and adds normalized fields. Composite requests synchronize once.
 - Fixed stale location/docking seeds beyond the recent-event window.
