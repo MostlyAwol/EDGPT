@@ -37,3 +37,9 @@
 - MCP server.
 - Optional GitHub relay.
 - Optional OpenAI tunnel integration.
+
+## Unreleased
+
+- Added shared HTTP/MCP health, capabilities and version discovery, background indexing, and launcher/dashboard diagnostics with private data excluded.
+- Relay failures now report degraded health; tunnel connectivity is explicitly unverified.
+- Added diagnostic contract tests and resolved existing test conflict markers.

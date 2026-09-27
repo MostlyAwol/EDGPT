@@ -1,8 +1,9 @@
+from diagnostics import health, capabilities, version, start_indexer
 import json
 import os
 import sys
 import time
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -228,6 +229,13 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
         qs = parse_qs(parsed.query, keep_blank_values=True)
 
+        if path == "/health":
+            return send_json(self, health())
+        if path == "/capabilities":
+            return send_json(self, capabilities())
+        if path == "/version":
+            return send_json(self, version())
+
         if path == "/state":
             try:
                 options = parse_state_options(qs)
@@ -281,8 +289,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/":
             html = """<!DOCTYPE html><html><head><meta charset='UTF-8'><title>EDGPT Full Context</title>
 <style>body{background:#111;color:#eee;font-family:Consolas,monospace;margin:30px}h1{color:#ff9500}pre{background:#191919;padding:20px;border-radius:8px;white-space:pre-wrap}</style></head>
-<body><h1>EDGPT Full Context</h1><p>Current state + complete indexed journal history.</p><pre id='data'>Loading...</pre>
-<script>async function update(){try{const r=await fetch('/state?time='+Date.now());const d=await r.json();document.getElementById('data').textContent=JSON.stringify(d,null,2)}catch(e){document.getElementById('data').textContent='ERROR: '+e}}update();setInterval(update,5000)</script></body></html>"""
+<body><h1>EDGPT Full Context</h1><p>Current state + complete indexed journal history.</p><pre id='health'>Checking health...</pre><pre id='data'>Loading...</pre>
+<script>async function update(){try{const h=await(await fetch('/health')).json();document.getElementById('health').textContent=JSON.stringify(h,null,2);const r=await fetch('/state?time='+Date.now());const d=await r.json();document.getElementById('data').textContent=JSON.stringify(d,null,2)}catch(e){document.getElementById('data').textContent='ERROR: '+e}}update();setInterval(update,5000)</script></body></html>"""
             body = html.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -304,17 +312,11 @@ def main():
     print("======================================\n")
     print("Elite folder:")
     print(ELITE_DIR)
-    print("\nIndexing all journals...")
-    added = sync_journals()
-    summary = history_summary()
-    print(
-        f"Indexed: {summary['events_indexed']} events across "
-        f"{summary['journal_files_indexed']} journals (+{added} new)"
-    )
+    start_indexer()
     print(f"\nDashboard: http://localhost:{PORT}")
     print(f"Raw API:   http://localhost:{PORT}/state")
     print(f"History:   http://localhost:{PORT}/history/summary\n")
-    HTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
 
 
 if __name__ == "__main__":

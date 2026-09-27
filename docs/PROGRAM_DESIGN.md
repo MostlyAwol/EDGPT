@@ -283,7 +283,7 @@ and MCP tools retrieve full or historical maps on demand.
 
 ## Local HTTP interface
 
-`bin/server.py` uses the standard-library single-threaded `HTTPServer` bound to
+`bin/server.py` uses the standard-library `ThreadingHTTPServer` bound to
 loopback only.
 
 | Endpoint | Result |
@@ -399,7 +399,7 @@ data unnecessarily.
 
 These are facts to account for, not necessarily bugs that must all be fixed:
 
-- The project currently has no automated test suite.
+- The project has a unittest suite under `tests/`.
 - Current-state logic is duplicated/uneven between HTTP and MCP.
 - Location fallback prefers the newest `Location` event whenever any exists,
   then `FSDJump`, then `CarrierJump`; it does not directly compare timestamps
@@ -448,3 +448,7 @@ When returning to the repository later:
 - **MCP**: the protocol through which an AI client invokes EDGPT tools.
 - **Relay**: optional publication of EDGPT state/raw files to GitHub.
 - **Frozen mode**: execution from PyInstaller-built binaries.
+
+## Health and discovery update
+
+`bin/diagnostics.py` owns shared health and capability contracts. The state server runs a background indexing worker. MCP and launcher CHECK use endpoint probes. See [HEALTH.md](HEALTH.md) for statuses, privacy, timing and integration limitations.

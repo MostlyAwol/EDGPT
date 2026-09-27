@@ -239,3 +239,7 @@ Elite Dangerous is a trademark of Frontier Developments. Third-party services an
 ## License
 
 See `LICENSE`.
+
+## Health and feature discovery
+
+Open `/health` for ready, degraded, indexing, stale or error status; `/capabilities` lists available features and `/version` identifies schemas. MCP provides `get_edgpt_health` and `get_edgpt_capabilities`. Launcher CHECK uses endpoint diagnostics and retains the last issue. See [the health contract](docs/HEALTH.md).

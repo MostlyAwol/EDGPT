@@ -1,3 +1,4 @@
+from diagnostics import heartbeat
 import base64
 import ctypes
 import hashlib
@@ -154,8 +155,10 @@ def mirror_raw_elite_files(token, repo, branch, known_hashes):
         except urllib.error.HTTPError as error:
             body = error.read().decode(errors="replace")
             print("Raw mirror GitHub error:", path.name, error.code, body)
+            raise
         except Exception as error:
             print("Raw mirror error:", path.name, error)
+            raise
 
     manifest = {
         "generated_unix": int(time.time()),
@@ -221,9 +224,12 @@ while True:
         if time.time() - last_raw_mirror >= RAW_MIRROR_SECONDS:
             raw_hashes = mirror_raw_elite_files(token, repo, branch, raw_hashes)
             last_raw_mirror = time.time()
+        heartbeat("github", "ready")
     except urllib.error.HTTPError as error:
+        heartbeat("github", "degraded", "GitHub request failed; check credentials, repository and network.")
         body = error.read().decode(errors="replace")
         print("GitHub error:", error.code, body)
     except Exception as error:
+        heartbeat("github", "degraded", "Relay update failed; check local state service and GitHub settings.")
         print("Waiting:", error)
     time.sleep(POLL_SECONDS)

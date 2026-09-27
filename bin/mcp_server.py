@@ -1,3 +1,4 @@
+from diagnostics import health, capabilities
 import json
 import os
 from pathlib import Path
@@ -17,7 +18,8 @@ from system_map_store import get_current_system_map, get_system_map, list_system
 DEFAULT_ELITE_DIR = Path.home() / "Saved Games" / "Frontier Developments" / "Elite Dangerous"
 ELITE_DIR = Path(os.environ.get("ELITE_JOURNAL_DIR", str(DEFAULT_ELITE_DIR))).expanduser()
 
-mcp = FastMCP("Elite Dangerous Full Context", stateless_http=True, json_response=True)
+mcp = FastMCP("Elite Dangerous Full Context", stateless_http=True, json_response=True,
+              host="127.0.0.1", port=int(os.environ.get("EDGPT_MCP_PORT", "8000")))
 
 
 def read_json_file(name):
@@ -57,6 +59,18 @@ def build_current_state():
         "live_json_files": list_live_json(),
         "system_map": get_current_system_map(include_full=False),
     }
+
+
+@mcp.tool()
+def get_edgpt_health() -> dict:
+    """Check EDGPT readiness, indexing, stale data and component failures without exposing private data."""
+    return health(origin="mcp")
+
+
+@mcp.tool()
+def get_edgpt_capabilities() -> dict:
+    """Discover API versions, endpoints, tools, state profiles, limits and enabled integrations."""
+    return capabilities()
 
 
 @mcp.tool()
@@ -170,5 +184,4 @@ def get_saved_system_map_full(system: str) -> str:
 
 
 if __name__ == "__main__":
-    sync_journals()
     mcp.run(transport="streamable-http")

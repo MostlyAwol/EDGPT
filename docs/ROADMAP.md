@@ -166,6 +166,9 @@ EDGPT normalizes the documented labels into stable PascalCase identifiers.
 
 ## 3. Health, capabilities, and real diagnostics
 
+Implemented: see [HEALTH.md](HEALTH.md). Tunnel connectivity remains explicitly
+unverified; packaged runtime checks are part of the release checklist.
+
 ### Goal
 
 Make it obvious whether EDGPT is ready, degraded, indexing, stale, or broken,

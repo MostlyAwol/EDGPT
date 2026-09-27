@@ -13,8 +13,9 @@ from tkinter import filedialog, messagebox, simpledialog
 
 APP_NAME = "EDGPT (MostlyAwol)"
 APP_VERSION = "0.5.0-beta"
-MCP_URL = "http://127.0.0.1:8000/mcp"
-STATE_URL = "http://127.0.0.1:8080/state"
+MCP_URL = "http://127.0.0.1:" + os.environ.get("EDGPT_MCP_PORT", "8000") + "/mcp"
+STATE_URL = "http://127.0.0.1:" + os.environ.get("EDGPT_STATE_PORT", "8080") + "/state"
+HEALTH_URL = STATE_URL.rsplit("/", 1)[0] + "/health"
 
 FROZEN = bool(getattr(sys, "frozen", False))
 ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
@@ -213,7 +214,7 @@ def url_ok(url, timeout=2):
 def wait_for_state(timeout=12):
     end = time.time() + timeout
     while time.time() < end:
-        if url_ok(STATE_URL, timeout=1):
+        if url_ok(STATE_URL.rsplit("/", 1)[0] + "/version", timeout=1):
             return True
         time.sleep(0.25)
     return False
@@ -369,28 +370,53 @@ def stop_all():
     log("Bridge stopped.")
 
 
-def run_diagnostics():
-    checks = [
-        ("Elite journal folder", Path(config["elite"]["journal_path"]).exists(), config["elite"]["journal_path"]),
-        ("State server", url_ok(STATE_URL), STATE_URL),
-        ("MCP process", proc_running(mcp_proc), MCP_URL),
-    ]
-    if config["github"]["enabled"]:
-        checks.append(("GitHub Relay", proc_running(uploader_proc), config["github"]["repository"] or "not configured"))
-    if config["openai"]["enabled"]:
-        checks.append(("OpenAI tunnel", proc_running(openai_proc), config["openai"]["tunnel_id"] or "not configured"))
+_diagnostic_running = False
+_last_diagnostic_error = ""
 
-    log("")
-    log("EDGPT CHECK")
-    log("-" * 58)
-    failed = 0
-    for name, ok, detail in checks:
-        log(f"{'OK' if ok else 'FAIL'}  {name}  |  {detail}")
-        if not ok:
-            failed += 1
-    log("-" * 58)
-    log("Bridge is ready." if failed == 0 else f"{failed} check(s) need attention.")
-    log("")
+
+def run_diagnostics(report=True):
+    global _diagnostic_running
+    if _diagnostic_running:
+        return
+    _diagnostic_running = True
+
+    def check():
+        try:
+            # A tunnel child has no stable readiness endpoint in the bundled CLI.
+            # Explicitly report unverified connectivity rather than claiming ready.
+            if config["openai"]["enabled"]:
+                value = {"status": "degraded", "observed_at": time.time(), "last_success": None,
+                         "last_error": "Tunnel connectivity is unverified; inspect tunnel logs." if proc_running(openai_proc)
+                         else "Tunnel is not running; check tunnel settings."}
+                target = DATA / "tunnel_health.json"
+                temporary = target.with_suffix(".tmp")
+                temporary.write_text(json.dumps(value), encoding="utf-8")
+                temporary.replace(target)
+            with urllib.request.urlopen(HEALTH_URL, timeout=8) as response:
+                result = json.load(response)
+        except Exception:
+            result = {"status": "error", "components": {"state_server": {
+                "status": "error", "last_error": "State health endpoint unavailable; start or restart the bridge."}}}
+        root.after(0, display, result)
+
+    def display(result):
+        global _diagnostic_running, _last_diagnostic_error
+        _diagnostic_running = False
+        parts = result["components"]
+        state_var.set(result["status"].upper())
+        for name, variable in (("mcp", mcp_var), ("github", github_var), ("tunnel", openai_var)):
+            variable.set(parts.get(name, {"status": "unknown"})["status"].upper())
+        errors = [name + ": " + value["last_error"] for name, value in parts.items()
+                  if value.get("last_error") and value["status"] not in ("ready", "disabled")]
+        if errors:
+            _last_diagnostic_error = " | ".join(errors)
+        diagnostic_var.set("Last issue: " + _last_diagnostic_error if _last_diagnostic_error else "No diagnostic errors reported.")
+        if report:
+            log("EDGPT CHECK: " + result["status"].upper())
+            for name, value in parts.items():
+                log(name + ": " + value["status"] + (" | " + value["last_error"] if value.get("last_error") else ""))
+
+    threading.Thread(target=check, daemon=True).start()
 
 
 def open_settings():
@@ -485,11 +511,8 @@ def open_settings():
 
 
 def update_status():
-    state_var.set("RUNNING" if proc_running(state_proc) else "STOPPED")
-    mcp_var.set("RUNNING" if proc_running(mcp_proc) else "STOPPED")
-    github_var.set("RUNNING" if proc_running(uploader_proc) else ("DISABLED" if not config["github"]["enabled"] else "STOPPED"))
-    openai_var.set("RUNNING" if proc_running(openai_proc) else ("DISABLED" if not config["openai"]["enabled"] else "STOPPED"))
-    root.after(1000, update_status)
+    run_diagnostics(report=False)
+    root.after(10000, update_status)
 
 
 def on_close():
@@ -530,6 +553,9 @@ for row, (name, variable) in enumerate([
 ]):
     tk.Label(status, text=name + ":", width=18, anchor="w", font=("Segoe UI", 10, "bold")).grid(row=row, column=0, sticky="w", pady=2)
     tk.Label(status, textvariable=variable, anchor="w", font=("Consolas", 9)).grid(row=row, column=1, sticky="w", pady=2)
+
+diagnostic_var = tk.StringVar(value="Checking health...")
+tk.Label(root, textvariable=diagnostic_var, wraplength=740, anchor="w").pack(fill="x", padx=18)
 
 log_frame = tk.LabelFrame(root, text="Log")
 log_frame.pack(fill="both", expand=True, padx=18, pady=(0, 18))

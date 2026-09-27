@@ -15,3 +15,11 @@
 - [ ] Verify README/Quick Start match the release.
 - [ ] Upload installer, portable ZIP, and `SHA256SUMS.txt`.
 - [ ] Mark 0.2.0 as beta/pre-release until tested by multiple independent PCs.
+
+## Health and discovery
+
+- Run `.venv/Scripts/python.exe -m unittest discover -s tests`.
+- In the packaged build, check `/version`, `/capabilities`, `/health` and both diagnostic MCP tools.
+- Confirm startup indexing remains observable, and CHECK reports a stopped MCP endpoint despite a healthy state server.
+- Check stale/offline-game data, a missing journal folder, inaccessible databases, and an enabled failing relay.
+- Confirm diagnostics contain no private paths, commander names or tokens; tunnel readiness remains unverified until an actual connectivity check exists.
