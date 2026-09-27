@@ -140,7 +140,9 @@ get_saved_system_map_full
 `Status.json` responses preserve Frontier's numeric `Flags` and `Flags2` while
 also adding `FlagsDecoded`/`Flags2Decoded` name lists. Unknown active bit
 positions are reported in `FlagsUnknownBits`/`Flags2UnknownBits`. Missing raw
-fields remain absent rather than being treated as zero.
+fields remain absent rather than being treated as zero. The numeric `GuiFocus`
+field is likewise preserved and accompanied by `GuiFocusDecoded` for documented
+values, such as `"Galaxy Map"`.
 
 System maps are built incrementally from exploration journal events and saved
 by `SystemAddress`. EDGPT backfills maps from indexed historical journals and

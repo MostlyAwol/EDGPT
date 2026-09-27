@@ -216,7 +216,9 @@ All `Status.json` reads also pass through `bin/status_flags.py`. It preserves
 the numeric `Flags` and `Flags2` values and adds deterministic `FlagsDecoded`
 and `Flags2Decoded` name lists. Corresponding `FlagsUnknownBits` fields expose
 unrecognized active bit positions. Definitions are normalized from section 14
-of Frontier's Journal Manual v32 and shared by HTTP and MCP.
+of Frontier's Journal Manual v32 and shared by HTTP and MCP. Documented
+`GuiFocus` values also gain a human-readable `GuiFocusDecoded` label while the
+numeric value remains unchanged; unknown values are left undecoded.
 
 Location falls back from `Location` to `FSDJump` to `CarrierJump`. Ship identity
 comes from `LoadGame`/`Loadout`. Docking state is reconstructed from location

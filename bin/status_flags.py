@@ -1,4 +1,4 @@
-"""Decode Elite Dangerous Status.json flag bitfields.
+"""Decode Elite Dangerous Status.json numeric values.
 
 Definitions come from section 14 of Frontier's Journal Manual v32:
 https://hosting.zaonce.net/community/journal/v32/Journal_Manual-v32.pdf
@@ -62,6 +62,26 @@ STATUS_FLAG2_NAMES = (
     "OnFootSocialSpace",
     "OnFootExterior",
     "BreathableAtmosphere",
+    "Telepresence Multicrew",
+    "Physical Multicrew",
+    "FSD Hyperdrive Charging",
+    "Supercruise Overdrive (SCO) Active",
+    "Supercruise Assist Active",
+)
+
+GUI_FOCUS_NAMES = (
+    "No GUI screen focused (normal cockpit view)",
+    "Internal Panel",
+    "External Panel",
+    "Comms Panel",
+    "Role Panel",
+    "Station Services",
+    "Galaxy Map",
+    "System Map",
+    "System Orrery View",
+    "Full Spectrum System Scanner",
+    "Detailed Surface Scanner",
+    "Codex",
 )
 
 
@@ -76,12 +96,13 @@ def _decode_bitfield(value, names):
 
 
 def decode_status_flags(status):
-    """Return a shallow copy of a Status.json object with decoded flag fields.
+    """Return a shallow copy of Status.json with decoded numeric fields.
 
     Raw ``Flags`` and ``Flags2`` values are preserved exactly. A missing or
     malformed bitfield remains unavailable and does not gain derived fields.
     Unknown active bits are reported by bit position so future game additions
-    cannot silently disappear.
+    cannot silently disappear. A documented ``GuiFocus`` integer gains its
+    corresponding human-readable label without replacing the raw value.
     """
     if not isinstance(status, dict):
         return status
@@ -96,5 +117,13 @@ def decode_status_flags(status):
             decoded, unknown = _decode_bitfield(value, names)
             result[decoded_name] = decoded
             result[unknown_name] = unknown
+
+    gui_focus = status.get("GuiFocus")
+    if (
+        isinstance(gui_focus, int)
+        and not isinstance(gui_focus, bool)
+        and 0 <= gui_focus < len(GUI_FOCUS_NAMES)
+    ):
+        result["GuiFocusDecoded"] = GUI_FOCUS_NAMES[gui_focus]
 
     return result

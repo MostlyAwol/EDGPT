@@ -4,6 +4,8 @@
 
 - Added shared human-readable decoding for `Status.json` `Flags` and `Flags2`
   across HTTP and MCP while retaining raw integers and exposing unknown bits.
+- Added `GuiFocusDecoded` labels for documented `Status.json` `GuiFocus` values
+  while preserving the original integer.
 - Added persistent simple and full text system maps built from exploration,
   FSS, SAA, barycentre, organic, and signal journal events.
 - Added historical map backfill and per-system merging so repeat visits retain

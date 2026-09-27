@@ -105,7 +105,9 @@ change.
 single decoder, retain the original integers, list documented active flags in
 bit order, and report unknown active bit positions explicitly. Tests cover all
 documented bits, combinations, zero/missing/malformed values, unknown high
-bits, and Frontier's published `16842765` example.
+bits, and Frontier's published `16842765` example. The same decoder also adds a
+human-readable `GuiFocusDecoded` label for documented `GuiFocus` values 0-11
+while retaining the raw integer.
 
 ### Goal
 

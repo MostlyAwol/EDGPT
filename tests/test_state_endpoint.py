@@ -31,6 +31,8 @@ class StateEndpointContractTests(unittest.TestCase):
                 "Flags": 9,
                 "FlagsDecoded": ["Docked", "ShieldsUp"],
                 "FlagsUnknownBits": [],
+                "GuiFocus": 6,
+                "GuiFocusDecoded": "Galaxy Map",
                 "Fuel": {"FuelMain": 12.5, "FuelReservoir": 0.5},
             },
             "NavRoute.json": {"Route": [{"StarSystem": "Destination"}]},
@@ -130,6 +132,8 @@ class StateEndpointContractTests(unittest.TestCase):
         self.assertIn("status", state)
         self.assertEqual(state["status"]["Flags"], 9)
         self.assertEqual(state["status"]["FlagsDecoded"], ["Docked", "ShieldsUp"])
+        self.assertEqual(state["status"]["GuiFocus"], 6)
+        self.assertEqual(state["status"]["GuiFocusDecoded"], "Galaxy Map")
         self.assertIn("navroute", state)
         self.assertIn("system_map", state)
         server.history_summary.assert_not_called()
