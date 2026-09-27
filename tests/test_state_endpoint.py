@@ -27,6 +27,7 @@ class StateEndpointContractTests(unittest.TestCase):
             for index in range(300)
         ]
         cls.live_files = {
+<<<<<<< HEAD
             "Status.json": {
                 "Flags": 9,
                 "FlagsDecoded": ["Docked", "ShieldsUp"],
@@ -35,6 +36,9 @@ class StateEndpointContractTests(unittest.TestCase):
                 "GuiFocusDecoded": "Galaxy Map",
                 "Fuel": {"FuelMain": 12.5, "FuelReservoir": 0.5},
             },
+=======
+            "Status.json": {"Fuel": {"FuelMain": 12.5, "FuelReservoir": 0.5}},
+>>>>>>> 795372fe7b9a16e071fe087c4495d74f54276bc3
             "NavRoute.json": {"Route": [{"StarSystem": "Destination"}]},
             "Cargo.json": {"Inventory": []},
         }
@@ -130,10 +134,13 @@ class StateEndpointContractTests(unittest.TestCase):
         self.assertEqual(state["fuel"]["capacity"], 32.0)
         self.assertEqual(state["fuel"]["main"], 12.5)
         self.assertIn("status", state)
+<<<<<<< HEAD
         self.assertEqual(state["status"]["Flags"], 9)
         self.assertEqual(state["status"]["FlagsDecoded"], ["Docked", "ShieldsUp"])
         self.assertEqual(state["status"]["GuiFocus"], 6)
         self.assertEqual(state["status"]["GuiFocusDecoded"], "Galaxy Map")
+=======
+>>>>>>> 795372fe7b9a16e071fe087c4495d74f54276bc3
         self.assertIn("navroute", state)
         self.assertIn("system_map", state)
         server.history_summary.assert_not_called()
