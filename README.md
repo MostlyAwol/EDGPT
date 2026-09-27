@@ -243,3 +243,13 @@ See `LICENSE`.
 ## Health and feature discovery
 
 Open `/health` for ready, degraded, indexing, stale or error status; `/capabilities` lists available features and `/version` identifies schemas. MCP provides `get_edgpt_health` and `get_edgpt_capabilities`. Launcher CHECK uses endpoint diagnostics and retains the last issue. See [the health contract](docs/HEALTH.md).
+
+## Shared state and automated checks
+
+HTTP and MCP use the same current-state reducer. MCP retains raw context and
+also returns the normalized HTTP fields. See [the state foundation](docs/STATE_FOUNDATION.md)
+for compatibility and database recovery. Run all tests without live commander data:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```

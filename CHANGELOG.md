@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Shared HTTP/MCP current-state builder and pure reducer; MCP preserves raw
+  context and adds normalized fields. Composite requests synchronize once.
+- Fixed stale location/docking seeds beyond the recent-event window.
+- Versioned history schema adoption and map invalidation by history generation.
+  Truncation removes obsolete indexed rows; incomplete lines retry on append.
+- Added synthetic ingestion/reducer/import tests and MCP client smoke checks.
+
 - Added shared human-readable decoding for `Status.json` `Flags` and `Flags2`
   across HTTP and MCP while retaining raw integers and exposing unknown bits.
 - Added `GuiFocusDecoded` labels for documented `Status.json` `GuiFocus` values
@@ -39,6 +46,13 @@
 - Optional OpenAI tunnel integration.
 
 ## Unreleased
+
+- Shared HTTP/MCP current-state builder and pure reducer; MCP preserves raw
+  context and adds normalized fields. Composite requests synchronize once.
+- Fixed stale location/docking seeds beyond the recent-event window.
+- Versioned history schema adoption and map invalidation by history generation.
+  Truncation removes obsolete indexed rows; incomplete lines retry on append.
+- Added synthetic ingestion/reducer/import tests and MCP client smoke checks.
 
 - Added shared HTTP/MCP health, capabilities and version discovery, background indexing, and launcher/dashboard diagnostics with private data excluded.
 - Relay failures now report degraded health; tunnel connectivity is explicitly unverified.

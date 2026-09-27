@@ -2,18 +2,17 @@ from diagnostics import health, capabilities, version, start_indexer
 import json
 import os
 import sys
-import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from history_store import history_summary, latest_event, recent_events, search_events, sync_journals
-from status_flags import decode_status_flags
+from history_store import history_summary, recent_events, search_events
+from current_state import build_state
 from system_map_store import get_current_system_map, get_system_map, list_system_maps
 
-if hasattr(sys.stdout, "reconfigure"):
+if __name__ == "__main__" and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-if hasattr(sys.stderr, "reconfigure"):
+if __name__ == "__main__" and hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 DEFAULT_ELITE_DIR = Path.home() / "Saved Games" / "Frontier Developments" / "Elite Dangerous"
@@ -22,30 +21,6 @@ PORT = int(os.environ.get("EDGPT_STATE_PORT", "8080"))
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
-
-
-def read_json_file(filename):
-    path = ELITE_DIR / filename
-    if not path.exists() or not path.is_file():
-        return None
-    try:
-        with path.open("r", encoding="utf-8") as f:
-            value = json.load(f)
-            return decode_status_flags(value) if filename.lower() == "status.json" else value
-    except Exception:
-        return None
-
-
-def all_live_json_files():
-    result = {}
-    try:
-        for path in sorted(ELITE_DIR.glob("*.json")):
-            value = read_json_file(path.name)
-            if value is not None:
-                result[path.name] = value
-    except Exception:
-        pass
-    return result
 
 
 def parse_state_options(query):
@@ -82,135 +57,6 @@ def parse_state_options(query):
         "include_loadout": optional_bool("loadout"),
         "include_live_files": optional_bool("live_files"),
     }
-
-
-def build_state(
-    include_history_summary=False,
-    recent_event_count=None,
-    include_loadout=False,
-    include_live_files=False,
-):
-    sync_journals()
-    if include_live_files:
-        live_files = all_live_json_files()
-        status_file = live_files.get("Status.json")
-        navroute_file = live_files.get("NavRoute.json")
-    else:
-        live_files = None
-        status_file = read_json_file("Status.json")
-        navroute_file = read_json_file("NavRoute.json")
-
-    requested_event_count = int(recent_event_count or 0)
-    replay_events = recent_events(max(250, requested_event_count))
-
-    loadout = latest_event("Loadout")
-    location_event = latest_event("Location") or latest_event("FSDJump") or latest_event("CarrierJump")
-    load_game = latest_event("LoadGame")
-    docked_event = latest_event("Docked")
-    undocked_event = latest_event("Undocked")
-
-    state = {
-        "generated_at": time.time(),
-        "system": None,
-        "system_address": None,
-        "star_position": None,
-        "body": None,
-        "body_type": None,
-        "station": None,
-        "docked": False,
-        "ship": None,
-        "ship_name": None,
-        "ship_ident": None,
-        "jump_range": None,
-        "fuel": {"main": None, "reservoir": None, "capacity": None},
-        "location": {"latitude": None, "longitude": None, "altitude": None, "heading": None},
-        "status": status_file,
-        "navroute": navroute_file,
-        "system_map": get_current_system_map(include_full=False),
-    }
-    if include_history_summary:
-        state["history_summary"] = history_summary()
-    if recent_event_count is not None:
-        state["recent_events"] = (
-            replay_events[-requested_event_count:] if requested_event_count else []
-        )
-    if include_loadout:
-        state["loadout"] = loadout
-    if include_live_files:
-        state["live_files"] = live_files
-
-    replay = []
-    for candidate in (location_event, load_game, loadout):
-        if candidate:
-            replay.append(candidate)
-    replay.extend(replay_events)
-
-    for e in replay:
-        event = e.get("event")
-        if event in ("Location", "FSDJump", "CarrierJump"):
-            state["system"] = e.get("StarSystem", state["system"])
-            state["system_address"] = e.get("SystemAddress", state["system_address"])
-            state["star_position"] = e.get("StarPos", state["star_position"])
-            state["body"] = e.get("Body", state["body"])
-            state["body_type"] = e.get("BodyType", state["body_type"])
-            if event == "Location" and e.get("Docked") is not None:
-                state["docked"] = bool(e.get("Docked"))
-                if state["docked"]:
-                    state["station"] = e.get("StationName")
-
-        if event == "Docked":
-            state["station"] = e.get("StationName")
-            state["docked"] = True
-        elif event == "Undocked":
-            state["station"] = None
-            state["docked"] = False
-
-        if event == "LoadGame":
-            state["ship"] = e.get("Ship")
-            state["ship_name"] = e.get("ShipName")
-            state["ship_ident"] = e.get("ShipIdent")
-
-        if event == "Loadout":
-            state["ship"] = e.get("Ship", state["ship"])
-            state["ship_name"] = e.get("ShipName", state["ship_name"])
-            state["ship_ident"] = e.get("ShipIdent", state["ship_ident"])
-            state["jump_range"] = e.get("MaxJumpRange", state["jump_range"])
-            capacity = e.get("FuelCapacity")
-            if isinstance(capacity, dict):
-                state["fuel"]["capacity"] = capacity.get("Main")
-
-        if event == "FSDJump":
-            if e.get("FuelLevel") is not None:
-                state["fuel"]["main"] = e.get("FuelLevel")
-        elif event == "FuelScoop":
-            if e.get("Total") is not None:
-                state["fuel"]["main"] = e.get("Total")
-
-        if event in ("Touchdown", "Liftoff"):
-            state["body"] = e.get("Body", state["body"])
-            state["location"]["latitude"] = e.get("Latitude")
-            state["location"]["longitude"] = e.get("Longitude")
-
-    status = state["status"]
-    if isinstance(status, dict):
-        state["location"]["latitude"] = status.get("Latitude", state["location"]["latitude"])
-        state["location"]["longitude"] = status.get("Longitude", state["location"]["longitude"])
-        state["location"]["altitude"] = status.get("Altitude")
-        state["location"]["heading"] = status.get("Heading")
-        fuel = status.get("Fuel")
-        if isinstance(fuel, dict):
-            state["fuel"]["main"] = fuel.get("FuelMain", state["fuel"]["main"])
-            state["fuel"]["reservoir"] = fuel.get("FuelReservoir")
-
-    if docked_event and undocked_event:
-        if str(docked_event.get("timestamp", "")) > str(undocked_event.get("timestamp", "")):
-            state["docked"] = True
-            state["station"] = docked_event.get("StationName")
-    elif docked_event and not undocked_event:
-        state["docked"] = True
-        state["station"] = docked_event.get("StationName")
-
-    return state
 
 
 def send_json(handler, value, code=200):

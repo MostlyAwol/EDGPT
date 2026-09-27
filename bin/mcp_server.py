@@ -1,5 +1,4 @@
 from diagnostics import health, capabilities
-import json
 import os
 from pathlib import Path
 
@@ -10,55 +9,17 @@ from history_store import (
     latest_event,
     recent_events,
     search_events,
-    sync_journals,
 )
-from status_flags import decode_status_flags
+from current_state import build_state, read_json_file, list_live_json
 from system_map_store import get_current_system_map, get_system_map, list_system_maps
-
-DEFAULT_ELITE_DIR = Path.home() / "Saved Games" / "Frontier Developments" / "Elite Dangerous"
-ELITE_DIR = Path(os.environ.get("ELITE_JOURNAL_DIR", str(DEFAULT_ELITE_DIR))).expanduser()
 
 mcp = FastMCP("Elite Dangerous Full Context", stateless_http=True, json_response=True,
               host="127.0.0.1", port=int(os.environ.get("EDGPT_MCP_PORT", "8000")))
 
 
-def read_json_file(name):
-    path = ELITE_DIR / name
-    if not path.exists() or not path.is_file():
-        return None
-    try:
-        with path.open("r", encoding="utf-8") as f:
-            value = json.load(f)
-            return decode_status_flags(value) if name.lower() == "status.json" else value
-    except Exception:
-        return None
-
-
-def list_live_json():
-    try:
-        return sorted(p.name for p in ELITE_DIR.glob("*.json") if p.is_file())
-    except Exception:
-        return []
-
-
 def build_current_state():
-    sync_journals()
-    loadout = latest_event("Loadout")
-    location = latest_event("Location") or latest_event("FSDJump") or latest_event("CarrierJump")
-    status = read_json_file("Status.json")
-    navroute = read_json_file("NavRoute.json")
-    events = recent_events(250)
-
-    return {
-        "location_event": location,
-        "loadout": loadout,
-        "status": status,
-        "navroute": navroute,
-        "history_summary": history_summary(),
-        "recent_events": events,
-        "live_json_files": list_live_json(),
-        "system_map": get_current_system_map(include_full=False),
-    }
+    return build_state(include_history_summary=True, recent_event_count=250,
+                       include_loadout=True, mcp_profile=True)
 
 
 @mcp.tool()
@@ -75,7 +36,7 @@ def get_edgpt_capabilities() -> dict:
 
 @mcp.tool()
 def get_elite_state() -> dict:
-    """Get rich current Elite Dangerous context: current location/loadout, live files, recent events, and history summary."""
+    """Get normalized current state plus raw location/loadout, live status/route, recent events, and history summary."""
     return build_current_state()
 
 

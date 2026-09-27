@@ -225,6 +225,12 @@ process is not necessarily a healthy service.
 
 ## 4. Shared state construction and automated test foundation
 
+**Status: completed on 2026-09-27.** HTTP and MCP share one state builder and
+pure reducer. Composite requests synchronize journals once. Versioned history
+schema adoption, generation-based map rebuilds, and isolated fixture/reducer,
+HTTP, import-safety and MCP client tests are documented in
+[STATE_FOUNDATION.md](STATE_FOUNDATION.md).
+
 ### Goal
 
 Remove duplicated state semantics and make future work safe to implement and

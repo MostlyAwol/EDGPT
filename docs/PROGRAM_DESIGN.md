@@ -50,7 +50,8 @@ external AI client access to game data.
 | `bin/history_store.py` | Incremental journal ingestion and SQLite query API | Imported library |
 | `bin/system_map.py` | Pure event-to-map merging, hierarchy inference, and text rendering | Imported library |
 | `bin/system_map_store.py` | Historical backfill and persistent per-system map cache | Imported library |
-| `bin/server.py` | Derived state model, history HTTP API, small local dashboard | Child process on `127.0.0.1:8080` |
+| `bin/current_state.py` | Shared state builder, pure reducer, live-file loading | Used by HTTP and MCP |
+| `bin/server.py` | State/history HTTP API, small local dashboard | Child process on `127.0.0.1:8080` |
 | `bin/mcp_server.py` | MCP tools over raw/live/current Elite data | Child process on `127.0.0.1:8000/mcp` |
 | `bin/uploader.py` | Optional state and raw-file mirror using GitHub Contents API | Child process |
 | `build-standalone.ps1` | PyInstaller builds, staging, optional installer compilation | Developer build script |
@@ -170,20 +171,19 @@ and busy timeout provide the cross-process coordination.
 1. Create the schema if needed.
 2. Sort all matching journal files.
 3. Load each file's saved byte offset and line number.
-4. If a file shrank, reset its cursor to the beginning.
+4. If a file shrank or was replaced at the same size, remove its indexed rows and reset its cursor.
 5. Skip an unchanged-size file.
 6. Seek to the cursor and parse newly appended lines only.
 7. Insert valid JSON with `INSERT OR IGNORE`.
 8. Save the new cursor.
 
-Malformed/partial lines and transient file errors are skipped rather than
-stopping the bridge. A consequence is that a malformed line skipped after the
-cursor advances is not retried unless the file later shrinks or the database is
-rebuilt.
+Malformed complete lines and non-object JSON are skipped. Incomplete trailing
+lines retain their starting cursor and retry on append. Truncation and
+same-size replacement remove obsolete rows for that file and invalidate maps
+through a history generation identifier.
 
-All public query helpers call `sync_journals()` before reading. This keeps data
-fresh without a dedicated file-watcher, at the cost of repeated filesystem and
-database checks during composite requests.
+Standalone query helpers synchronize by default. Composite state requests
+synchronize once and use `sync=False` / `sync_history=False` internally.
 
 ### Query API
 
@@ -202,47 +202,25 @@ formats.
 
 ## Current-state derivation
 
-The state HTTP server's `build_state()` is the richest normalized view. It:
+`bin/current_state.py` owns shared input gathering, pure `reduce_state()`
+semantics, and response selection. HTTP and MCP call the same builder.
+Imports start no listeners/indexers and create no runtime data directories.
 
-1. synchronizes journals;
-2. loads every valid top-level `*.json` live file;
-3. gets 250 recent raw events plus the newest `Loadout`, location-like,
-   `LoadGame`, `Docked`, and `Undocked` events;
-4. replays relevant fields into a stable state dictionary; and
-5. lets `Status.json` override rapidly changing coordinates, heading, altitude,
-   and fuel values.
+Each composite request synchronizes journals once, then explicitly skips
+nested synchronization in history and map reads. Indexed queries select the
+latest event of each reducer type plus a bounded 250-event window, ordered by
+history ID. Location, docking, ship and fuel seeds remain available after
+unrelated events fill that window. Location-like events compete in source
+order. Selecting more raw output events does not change normalized state.
 
-All `Status.json` reads also pass through `bin/status_flags.py`. It preserves
-the numeric `Flags` and `Flags2` values and adds deterministic `FlagsDecoded`
-and `Flags2Decoded` name lists. Corresponding `FlagsUnknownBits` fields expose
-unrecognized active bit positions. Definitions are normalized from section 14
-of Frontier's Journal Manual v32 and shared by HTTP and MCP. Documented
-`GuiFocus` values also gain a human-readable `GuiFocusDecoded` label while the
-numeric value remains unchanged; unknown values are left undecoded.
+The reducer does no I/O. Live status overrides coordinates and fuel. Shared
+live-file loading decodes status flags and GuiFocus while preserving raw data.
+HTTP retains independent opt-ins for history, recent events, loadout and live
+files. MCP retains its existing context fields and adds the normalized HTTP
+fields. `location_event` now selects the newest location-like source event.
 
-Location falls back from `Location` to `FSDJump` to `CarrierJump`. Ship identity
-comes from `LoadGame`/`Loadout`. Docking state is reconstructed from location
-and dock/undock events. Fuel is derived from loadout capacity, jump/scoop
-events, and current status.
-
-The default output contains convenient normalized fields while omitting the
-large raw `loadout`, `live_files`, `recent_events`, and `history_summary`
-fields. Callers can independently opt into each raw field. Internally, state
-derivation still uses the loadout, live status/route, and at least 250 recent
-events. This keeps the default LLM context small without making normalized
-state less accurate or discarding access to upstream data.
-
-The MCP server has a smaller `build_current_state()` rather than importing the
-HTTP server because importing `server.py` would immediately start its blocking
-server. The two representations overlap but are not identical:
-
-- HTTP `/state` returns normalized fields with independently selectable raw
-  history, loadout, and live-file context.
-- MCP `get_elite_state` returns the latest location event, loadout, status,
-  route, history summary, recent events, and live filenames.
-
-When changing the meaning of “current state,” explicitly decide whether both
-representations need the change.
+See [STATE_FOUNDATION.md](STATE_FOUNDATION.md) for schemas, recovery,
+compatibility details and isolated tests.
 
 ## Persistent system maps
 
@@ -400,15 +378,6 @@ data unnecessarily.
 These are facts to account for, not necessarily bugs that must all be fixed:
 
 - The project has a unittest suite under `tests/`.
-- Current-state logic is duplicated/uneven between HTTP and MCP.
-- Location fallback prefers the newest `Location` event whenever any exists,
-  then `FSDJump`, then `CarrierJump`; it does not directly compare timestamps
-  across those event types. Recent-event replay often corrects this, but only
-  when the newer movement event is still in the 250-event window.
-- Composite state requests call journal synchronization repeatedly through
-  nested query helpers.
-- The state HTTP server is single-threaded; a slow state build blocks other
-  HTTP requests.
 - Process status mostly means “the child has not exited,” not “the endpoint is
   healthy.” MCP diagnostics do not perform an MCP request.
 - Ports and URLs are constants rather than configuration.

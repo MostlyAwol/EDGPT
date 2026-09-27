@@ -13,6 +13,8 @@ BIN = Path(__file__).resolve().parents[1] / "bin"
 sys.path.insert(0, str(BIN))
 
 import server
+import current_state
+import history_store
 
 
 class StateEndpointContractTests(unittest.TestCase):
@@ -68,26 +70,26 @@ class StateEndpointContractTests(unittest.TestCase):
             return values.get(event_name)
 
         cls.patchers = [
-            patch.object(server, "sync_journals", return_value=0),
+            patch.object(history_store, "sync_journals", return_value=0),
             patch.object(
-                server,
+                history_store,
                 "recent_events",
-                side_effect=lambda limit: cls.events[-int(limit):],
+                side_effect=lambda limit, **kwargs: cls.events[-int(limit):],
             ),
-            patch.object(server, "latest_event", side_effect=latest_event),
+            patch.object(history_store, "latest_state_events", side_effect=lambda types, **kwargs: [e for t in types if (e := latest_event(t))]),
             patch.object(
-                server,
+                history_store,
                 "history_summary",
                 return_value={"events_indexed": 300, "journal_files_indexed": 1},
             ),
-            patch.object(server, "all_live_json_files", return_value=cls.live_files),
+            patch.object(current_state, "all_live_json_files", return_value=cls.live_files),
             patch.object(
-                server,
+                current_state,
                 "read_json_file",
-                side_effect=lambda name: cls.live_files.get(name),
+                side_effect=lambda name, journal_dir=None: cls.live_files.get(name),
             ),
             patch.object(
-                server,
+                current_state,
                 "get_current_system_map",
                 return_value={"system_name": "Test System", "simple_text": "System: Test System"},
             ),
@@ -136,9 +138,9 @@ class StateEndpointContractTests(unittest.TestCase):
         self.assertEqual(state["status"]["GuiFocusDecoded"], "Galaxy Map")
         self.assertIn("navroute", state)
         self.assertIn("system_map", state)
-        server.history_summary.assert_not_called()
-        server.all_live_json_files.assert_not_called()
-        server.recent_events.assert_called_once_with(250)
+        history_store.history_summary.assert_not_called()
+        current_state.all_live_json_files.assert_not_called()
+        history_store.recent_events.assert_not_called()
 
     def test_each_heavy_field_is_independently_selectable(self):
         cases = (
@@ -159,7 +161,7 @@ class StateEndpointContractTests(unittest.TestCase):
 
         self.assert_heavy_fields(state, {"recent_events"})
         self.assertEqual(state["recent_events"], [])
-        server.recent_events.assert_called_once_with(250)
+        history_store.recent_events.assert_not_called()
 
     def test_combined_options_return_all_requested_fields(self):
         state = self.request(

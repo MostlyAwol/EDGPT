@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 import threading
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
@@ -10,7 +11,6 @@ from typing import Optional
 DEFAULT_ELITE_DIR = Path.home() / "Saved Games" / "Frontier Developments" / "Elite Dangerous"
 ELITE_DIR = Path(os.environ.get("ELITE_JOURNAL_DIR", str(DEFAULT_ELITE_DIR))).expanduser()
 DATA_DIR = Path(os.environ.get("EDGPT_DATA_DIR", "data")).expanduser()
-DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "edgpt_history.db"
 
 SYSTEM_MAP_EVENT_TYPES = (
@@ -29,11 +29,14 @@ SYSTEM_MAP_EVENT_TYPES = (
     "ScanOrganic",
 )
 
+HISTORY_SCHEMA_VERSION = 1
+
 _LOCK = threading.RLock()
 
 
 @contextmanager
 def _connect():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=30)
     try:
         conn.row_factory = sqlite3.Row
@@ -47,6 +50,9 @@ def _connect():
 
 def init_db():
     with _LOCK, _connect() as conn:
+        stored_version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if stored_version not in (0, HISTORY_SCHEMA_VERSION):
+            raise RuntimeError("Unsupported history schema; use a compatible EDGPT version or rebuild from journals.")
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS events (
@@ -69,6 +75,10 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_events_system ON events(system);
             CREATE INDEX IF NOT EXISTS idx_events_ship ON events(ship);
 
+            CREATE TABLE IF NOT EXISTS history_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS journal_state (
                 journal_file TEXT PRIMARY KEY,
                 offset INTEGER NOT NULL DEFAULT 0,
@@ -78,6 +88,8 @@ def init_db():
             );
             """
         )
+        conn.execute("INSERT OR IGNORE INTO history_meta(key,value) VALUES('generation',?)", (uuid.uuid4().hex,))
+        conn.execute(f"PRAGMA user_version={HISTORY_SCHEMA_VERSION}")
 
 
 def _extract_fields(e: dict):
@@ -96,6 +108,7 @@ def sync_journals():
     inserted = 0
 
     with _LOCK, _connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         for filename in files:
             path = Path(filename)
             try:
@@ -104,7 +117,7 @@ def sync_journals():
                 continue
 
             row = conn.execute(
-                "SELECT offset, line_no, size FROM journal_state WHERE journal_file=?",
+                "SELECT offset, line_no, size, mtime FROM journal_state WHERE journal_file=?",
                 (path.name,),
             ).fetchone()
 
@@ -112,19 +125,26 @@ def sync_journals():
             line_no = int(row["line_no"]) if row else 0
             old_size = int(row["size"]) if row else 0
 
-            if stat.st_size < old_size or offset > stat.st_size:
+            replaced = row and stat.st_size == old_size and stat.st_mtime != row["mtime"]
+            if stat.st_size < old_size or offset > stat.st_size or replaced:
+                conn.execute("DELETE FROM events WHERE journal_file=?", (path.name,))
+                conn.execute("UPDATE history_meta SET value=? WHERE key='generation'", (uuid.uuid4().hex,))
                 offset = 0
                 line_no = 0
 
-            if stat.st_size == old_size and row:
+            if stat.st_size == old_size and row and not replaced and offset == stat.st_size:
                 continue
 
             try:
                 with path.open("rb") as f:
                     f.seek(offset)
                     while True:
+                        line_start = f.tell()
                         raw_line = f.readline()
                         if not raw_line:
+                            break
+                        if not raw_line.endswith(b"\n"):
+                            f.seek(line_start)
                             break
                         line_no += 1
                         try:
@@ -135,6 +155,8 @@ def sync_journals():
                         except Exception:
                             continue
 
+                        if not isinstance(e, dict):
+                            continue
                         system, system_address, body, station, ship = _extract_fields(e)
                         cur = conn.execute(
                             """
@@ -185,8 +207,9 @@ def _row_to_event(row):
         return {"event": row["event"], "timestamp": row["timestamp"]}
 
 
-def recent_events(limit=200):
-    sync_journals()
+def recent_events(limit=200, *, sync=True):
+    if sync:
+        sync_journals()
     limit = max(1, min(int(limit), 5000))
     with _connect() as conn:
         rows = conn.execute(
@@ -195,8 +218,9 @@ def recent_events(limit=200):
     return [_row_to_event(r) for r in reversed(rows)]
 
 
-def latest_event(event_name: str):
-    sync_journals()
+def latest_event(event_name: str, *, sync=True):
+    if sync:
+        sync_journals()
     with _connect() as conn:
         row = conn.execute(
             "SELECT raw_json,event,timestamp FROM events WHERE event=? ORDER BY id DESC LIMIT 1",
@@ -242,8 +266,9 @@ def search_events(
     return [_row_to_event(r) for r in rows]
 
 
-def history_summary():
-    sync_journals()
+def history_summary(*, sync=True):
+    if sync:
+        sync_journals()
     with _connect() as conn:
         total = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
         journals = conn.execute("SELECT COUNT(*) FROM journal_state").fetchone()[0]
@@ -305,9 +330,10 @@ def get_event_page(before_id: Optional[int] = None, limit: int = 500):
     }
 
 
-def history_max_event_id():
+def history_max_event_id(*, sync=True):
     """Return the current history watermark after indexing new journal lines."""
-    sync_journals()
+    if sync:
+        sync_journals()
     with _connect() as conn:
         row = conn.execute("SELECT COALESCE(MAX(id), 0) FROM events").fetchone()
     return int(row[0])
@@ -340,3 +366,30 @@ def get_system_map_event_batch(after_id=0, through_id=None, limit=2000):
             continue
         items.append({"id": int(row["id"]), "data": event})
     return items
+
+
+def history_generation():
+    """Identity changes on rebuild/replacement, even if event IDs have caught up."""
+    with _connect() as conn:
+        return conn.execute("SELECT value FROM history_meta WHERE key='generation'").fetchone()[0]
+
+
+def latest_state_events(event_types, *, sync=True):
+    """Latest event of each reducer type, in source order, beyond recent windows."""
+    if sync:
+        sync_journals()
+    with _connect() as conn:
+        rows = []
+        for event_type in event_types:
+            row = conn.execute(
+                "SELECT id,raw_json,event,timestamp FROM events WHERE event=? ORDER BY id DESC LIMIT 1",
+                (event_type,),
+            ).fetchone()
+            if row is not None:
+                rows.append(row)
+        # Retain recent partial updates as well as older seed events.
+        recent = conn.execute(
+            "SELECT id,raw_json,event,timestamp FROM events ORDER BY id DESC LIMIT 250"
+        ).fetchall()
+    ordered = {row["id"]: row for row in rows + recent if row["event"] in event_types}
+    return [_row_to_event(ordered[event_id]) for event_id in sorted(ordered)]

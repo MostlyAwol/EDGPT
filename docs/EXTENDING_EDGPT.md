@@ -12,7 +12,7 @@ Classify a requested feature before editing:
 | --- | --- | --- |
 | New raw journal query | `bin/history_store.py` | `bin/mcp_server.py`, `bin/server.py` |
 | New system-map event/field | `bin/system_map.py` | `bin/system_map_store.py`, map tests |
-| New derived current-state field | `bin/server.py` | `bin/mcp_server.py`, relay behavior |
+| New derived current-state field | `bin/current_state.py` | `bin/mcp_server.py`, relay behavior |
 | New MCP capability | `bin/mcp_server.py` | history/live-file source and README tool list |
 | New local HTTP endpoint | `bin/server.py` | consumers, privacy/CORS implications |
 | New setting or credential | `launcher.py` | helper environment/config loader, release scan |
@@ -44,15 +44,14 @@ names and MCP tool behavior even though there is no formal versioned API yet.
 ### 2. Put logic at the lowest reusable layer
 
 - Raw history storage/search belongs in `history_store.py`.
-- Transport-neutral derived state should ideally be a reusable function/module,
-  even though current code still derives HTTP and MCP state separately.
+- Shared state input gathering and pure reduction belong in `current_state.py`.
 - Protocol adaptation belongs in `server.py` or `mcp_server.py`.
 - UI code should supervise/configure; it should not become the sole owner of
   data-processing logic.
 
-If both HTTP and MCP need substantial new state logic, consider extracting a
-side-effect-free shared state module rather than duplicating the rules. Do not
-import `server.py` from elsewhere while it starts `serve_forever()` at import.
+Both transports call `current_state.build_state()`. Add shared semantics to
+`reduce_state()` and keep transport response selection outside the reducer.
+Server imports must not start listeners, workers, or create runtime data.
 
 ### 3. Preserve raw data
 
@@ -67,8 +66,8 @@ limits or cursor pagination. Avoid loading every event or every journal into
 memory. If adding a frequently filtered field, extract it during ingestion and
 add an SQLite index with a migration-safe `CREATE INDEX IF NOT EXISTS`.
 
-Be mindful that every query helper currently synchronizes journals. A new
-composite operation should not accidentally multiply full directory scans.
+Standalone queries synchronize by default. Composite state requests synchronize
+once, then use explicit `sync=False` / `sync_history=False` internal reads.
 
 ### 5. Make failure semantics explicit
 
@@ -133,8 +132,7 @@ def get_example_history(limit: int = 100) -> list:
 3. Add a stable default to the state dictionary so the key exists even when
    Elite is not emitting that data.
 4. Update replay rules without removing the raw event.
-5. Decide whether `mcp_server.build_current_state()` should expose the same
-   convenience field.
+5. Verify that HTTP and MCP expose the same normalized field.
 6. Confirm relay hashing ignores only genuinely volatile fields.
 7. Test “never observed,” normal update, and conflicting old/new source cases.
 
@@ -181,8 +179,8 @@ private data leaves the PC and make core local MCP work without it.
 
 ## Verification strategy
 
-There is no committed test suite yet, so feature work should add targeted tests
-where practical and still perform integration smoke checks.
+The committed unittest suite uses synthetic fixtures and temporary directories.
+No live commander data is needed. See [STATE_FOUNDATION.md](STATE_FOUNDATION.md).
 
 The repository expects a local Windows virtual environment at `.venv`. If its
 interpreter path is stale after moving machines or removing Python, recreate
@@ -217,16 +215,12 @@ Representative runtime smoke checks:
 
 Do not use a real user's journal folder for destructive/truncation tests.
 
-## A sensible first testing refactor
+## Shared state foundation
 
-If upcoming work becomes substantial, the highest-leverage preparation is:
-
-1. move server startup behind `if __name__ == "__main__"`;
-2. extract shared, side-effect-free state construction;
-3. make source/data paths injectable; and
-4. add temporary-directory tests for history and state derivation.
-
-That change would improve confidence without changing the public architecture.
+The shared foundation is implemented in `current_state.py`. Add pure reducer
+tests for new semantics and fixture-based ingestion tests for new journal
+patterns. Keep fixtures synthetic or fully sanitized. Version persisted models
+and document migration/rebuild behavior.
 
 ## Version-change checklist
 

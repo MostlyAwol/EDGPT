@@ -8,6 +8,7 @@ from pathlib import Path
 from history_store import (
     get_system_map_event_batch,
     history_max_event_id,
+    history_generation,
 )
 from system_map import (
     MAP_SCHEMA_VERSION,
@@ -20,7 +21,6 @@ from system_map import (
 
 
 DATA_DIR = Path(os.environ.get("EDGPT_DATA_DIR", "data")).expanduser()
-DATA_DIR.mkdir(parents=True, exist_ok=True)
 MAP_DB_PATH = DATA_DIR / "edgpt_system_maps.db"
 
 _LOCK = threading.RLock()
@@ -28,6 +28,7 @@ _LOCK = threading.RLock()
 
 @contextmanager
 def _connect():
+    MAP_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(MAP_DB_PATH, timeout=30)
     try:
         conn.row_factory = sqlite3.Row
@@ -120,17 +121,19 @@ def _save_model(conn, model):
     )
 
 
-def sync_system_maps():
+def sync_system_maps(*, sync_history=True):
     """Backfill and incrementally update saved maps from indexed journals."""
     init_db()
-    high_watermark = history_max_event_id()
+    high_watermark = history_max_event_id(sync=sync_history)
+    generation = history_generation()
     processed = 0
 
     with _LOCK, _connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
         stored_version = int(_meta(conn, "schema_version", "0") or 0)
         cursor = int(_meta(conn, "history_event_id", "0") or 0)
-        if stored_version != MAP_SCHEMA_VERSION or cursor > high_watermark:
+        if (stored_version != MAP_SCHEMA_VERSION or cursor > high_watermark
+                or _meta(conn, "history_generation") != generation):
             conn.execute("DELETE FROM system_maps")
             conn.execute("DELETE FROM map_meta")
             cursor = 0
@@ -164,6 +167,7 @@ def sync_system_maps():
                 _save_model(conn, model)
             _set_meta(conn, "history_event_id", cursor)
 
+        _set_meta(conn, "history_generation", generation)
         _set_meta(conn, "history_event_id", high_watermark)
         _set_meta(conn, "schema_version", MAP_SCHEMA_VERSION)
         conn.commit()
@@ -206,8 +210,8 @@ def get_system_map(identifier, include_full=False):
     return _result(model, include_full)
 
 
-def get_current_system_map(include_full=False):
-    sync_system_maps()
+def get_current_system_map(include_full=False, *, sync_history=True):
+    sync_system_maps(sync_history=sync_history)
     with _connect() as conn:
         address = _meta(conn, "current_system_address", "")
         if not address:

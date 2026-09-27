@@ -1,0 +1,6 @@
+{"event":"LoadGame","Ship":"SideWinder"}
+not json
+[]
+null
+{"event":"Location","StarSystem":"Legacy","Docked":false}
+{"event":"UnknownFutureEvent","NewField":{"retained":true}}
