@@ -24,6 +24,12 @@ the previously completed items.
 
 ## 1. Lean and configurable `/state` defaults
 
+**Status: completed on 2026-09-26.** The four fields are independently
+selectable, strict invalid values return HTTP 400, the relay explicitly opts
+into the full payload, and committed HTTP contract tests cover default,
+individual, combined, zero-event, false, and invalid requests. Capabilities
+registration remains part of item 3 because that interface does not exist yet.
+
 ### Goal
 
 Make the default `/state` response compact enough for routine LLM context while

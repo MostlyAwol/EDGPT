@@ -33,6 +33,9 @@ Click CHECK in EDGPT. A healthy core install should show `OK Elite journal folde
 
 Local state: `http://127.0.0.1:8080/state`
 
+The default state response is compact. Add individual query options when raw
+history, loadout, or live-file context is needed; see `README.md` for examples.
+
 ## OpenAI Secure MCP Tunnel
 
 OpenAI tunnel support is optional/advanced and disabled by default. It requires separately obtained tunnel-client software and account-side tunnel configuration. EDGPT's local MCP server works independently of it.

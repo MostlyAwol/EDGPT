@@ -9,7 +9,10 @@ import urllib.request
 from ctypes import wintypes
 from pathlib import Path
 
-LOCAL_STATE_URL = "http://localhost:8080/state"
+LOCAL_STATE_URL = (
+    "http://localhost:8080/state?history_summary=true&recent_events=250"
+    "&loadout=true&live_files=true"
+)
 CONFIG_FILE = Path(os.environ.get("EDGPT_CONFIG_FILE", "data/config.json")).expanduser()
 TOKEN_FILE = Path(os.environ.get("EDGPT_GITHUB_SECRET_FILE", "data/github_secret.bin")).expanduser()
 

@@ -94,15 +94,27 @@ Current state is also visible locally at:
 http://127.0.0.1:8080/state
 ```
 
-The state payload can be trimmed independently with query parameters:
+The default response is intentionally compact. It omits `history_summary`,
+`recent_events`, the raw `loadout`, and the complete `live_files` collection.
+Those fields can be requested independently:
 
 ```text
-http://127.0.0.1:8080/state?history_summary=false&recent_events=0
+http://127.0.0.1:8080/state?history_summary=true
+http://127.0.0.1:8080/state?recent_events=25
+http://127.0.0.1:8080/state?loadout=true
+http://127.0.0.1:8080/state?live_files=true
 ```
 
-`history_summary=false` omits the history summary. `recent_events` accepts a
-count from 0 to 5,000 and controls only the returned event list; EDGPT still
-uses its internal replay window to derive accurate current state.
+To request the previous full-context shape:
+
+```text
+http://127.0.0.1:8080/state?history_summary=true&recent_events=250&loadout=true&live_files=true
+```
+
+Boolean options accept `true`/`false`, `1`/`0`, `yes`/`no`, or `on`/`off`.
+`recent_events` accepts an integer from 0 to 5,000. Invalid values return HTTP
+400. EDGPT still uses its internal replay window and loadout/live data to derive
+accurate normalized state when those raw fields are omitted.
 
 ## MCP tools
 
@@ -151,6 +163,9 @@ edgpt_raw/live/...
 ```
 
 to a repository you control.
+
+The relay explicitly requests the full `/state` response, so this compact
+local default does not remove its existing loadout, history, or live-file data.
 
 **Use a private repository.** Full Context journals can contain detailed commander location and activity history.
 
