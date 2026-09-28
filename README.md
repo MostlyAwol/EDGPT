@@ -49,6 +49,14 @@ and nested scan data. System signals and complete system records appear below
 the hierarchy. Expanded sections stay open during live refreshes of the same
 system; **Expand all details** opens everything at once.
 
+Organic scans add an **Organic confirmed seen** badge and the organism's name;
+completed analysis is marked separately. All Log, Sample, and Analyse journal
+records remain available under **Scan Organic**. Existing indexed scans are
+recovered automatically when saved maps upgrade to the current schema.
+Stars use spectral-type colors and luminous icons, with distinct neutron-star,
+white-dwarf, and black-hole visuals. Empty inferred asteroid-belt parent cards
+are hidden while their recorded clusters remain in the hierarchy.
+
 Measurements on cards use readable units; detailed journal fields preserve their
 original values and units. This is a journal-based schematic, not an
 orbital-position chart. Only recorded information is available. Existing JSON

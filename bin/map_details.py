@@ -62,7 +62,9 @@ def tone(node):
         return "barycentre"
     if kind in ("Ring", "Belt cluster"):
         return "ring"
-    if "earth" in body or "water" in body:
+    if "earth" in body:
+        return "earthlike"
+    if "water" in body:
         return "water"
     if "ammonia" in body:
         return "ammonia"
@@ -71,6 +73,37 @@ def tone(node):
     if "gas giant" in body:
         return "gas"
     return "rock"
+
+
+def star_style(node):
+    """Controlled visual classes; journal strings never become CSS."""
+    if node.get("kind") != "Star":
+        return ""
+    spectral = str(node.get("event_data", {}).get("Scan", {}).get("StarType", ""))
+    if spectral in ("H", "SupermassiveBlackHole"):
+        return "stellar black-hole"
+    if spectral == "N":
+        return "stellar neutron"
+    if spectral.startswith("D"):
+        return "stellar white-dwarf"
+    if spectral.startswith("W"):
+        return "stellar spectral-o"
+    if spectral in ("C", "CN", "CJ", "CH", "CHd", "MS", "S"):
+        return "stellar carbon-star"
+    if spectral in ("O", "B", "A", "F", "G", "K", "M", "L", "T", "Y"):
+        return "stellar spectral-" + spectral.lower()
+    if spectral == "AeBe":
+        return "stellar spectral-a"
+    if spectral == "TTS":
+        return "stellar spectral-k"
+    return "stellar unknown-star"
+
+
+def hidden_belt_parent(node, child_nodes):
+    return (node.get("kind") == "Ring"
+            and node.get("name") == f'Body {node.get("body_id")}'
+            and not node.get("event_data") and bool(child_nodes)
+            and all(child.get("kind") == "Belt cluster" for child in child_nodes))
 
 
 def body_card(node):
@@ -116,10 +149,19 @@ def body_card(node):
     organisms = events.get("ScanOrganic", [])
     if isinstance(organisms, dict):
         organisms = [organisms]
-    for species in dict.fromkeys(item.get("Species_Localised") or item.get("Species")
-                                 for item in organisms):
-        if species:
-            badges.append(chip(label(species), "signal"))
+    if organisms:
+        badges.append(chip("Organic confirmed seen", "positive"))
+    confirmed = {}
+    for item in organisms:
+        identity = (item.get("Variant") or item.get("Variant_Localised") or item.get("Species")
+                    or item.get("Species_Localised") or item.get("Genus") or item.get("Genus_Localised") or "Unknown organic")
+        name = (item.get("Variant_Localised") or item.get("Species_Localised")
+                or item.get("Genus_Localised") or label(identity))
+        entry = confirmed.setdefault(identity, {"name": name, "analysed": False})
+        entry["analysed"] |= item.get("ScanType") == "Analyse"
+    for entry in confirmed.values():
+        status = "Analysis complete" if entry["analysed"] else "Confirmed seen"
+        badges.append(chip(f'{entry["name"]} · {status}', "signal"))
     env = []
     for field in ("Atmosphere", "Volcanism", "Luminosity"):
         if scan.get(field):
@@ -139,7 +181,8 @@ def body_card(node):
                           for name, value in events.items())
     detail_html += disclosure("Hierarchy & identity", fields({k: v for k, v in node.items() if k != "event_data"}), f"body-{key}-identity")
     style = tone(node)
-    return (f'<article class="body-card {style}" id="body-{text(key)}">'
+    stellar = star_style(node)
+    return (f'<article class="body-card {style} {stellar}" id="body-{text(key)}">'
             f'<div class="body-heading"><span class="orb" aria-hidden="true"></span><h3>{text(node.get("name", "Unknown body"))}</h3>'
             + chip(node.get("body_type", "Unknown"), style)
             + f'<span class="body-id">{text(node.get("kind", "Body"))} · ID {text(key)}</span></div>'
@@ -181,6 +224,8 @@ def render_details(model):
         if key in seen:
             return '<li class="muted">Repeated hierarchy link omitted</li>'
         seen.add(key)
+        if hidden_belt_parent(nodes[key], [nodes[child] for child in children[key]]):
+            return "".join(branch(child) for child in children[key])
         card = body_card(nodes[key])
         child_html = '<ul>' + "".join(branch(child) for child in children[key]) + '</ul>' if children[key] else ''
         return '<li>' + card + child_html + '</li>'

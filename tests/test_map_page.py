@@ -12,6 +12,7 @@ import server
 from map_page import render_map_page
 from system_map import apply_event, new_system_map
 from system_map_store import _result
+from map_details import body_card, star_style
 
 
 class MapPageTests(unittest.TestCase):
@@ -119,6 +120,44 @@ class MapPageTests(unittest.TestCase):
         page = render_map_page(_result(model, include_model=True))
         self.assertEqual(page.count('id="body-1"'), 1)
         self.assertEqual(page.count('id="body-2"'), 1)
+
+    def test_organic_body_field_confirms_seen_and_keeps_all_stages(self):
+        model = new_system_map(123, "Organic test")
+        for stage in ("Log", "Sample", "Analyse"):
+            apply_event(model, {"event": "ScanOrganic", "Body": 0, "ScanType": stage,
+                               "Species": "$test;", "Species_Localised": "Test organism"})
+        card = body_card(model["nodes"]["0"])
+        self.assertIn("Organic confirmed seen", card)
+        self.assertIn("Test organism · Analysis complete", card)
+        self.assertIn('data-key="body-0-ScanOrganic"', card)
+        self.assertEqual(len(model["nodes"]["0"]["event_data"]["ScanOrganic"]), 3)
+        other = new_system_map(123)
+        apply_event(other, {"event": "ScanOrganic", "Body": 4, "ScanType": "Log", "Species_Localised": "New life"})
+        card = body_card(other["nodes"]["4"])
+        self.assertIn("New life · Confirmed seen", card)
+        self.assertNotIn("Analysis complete", card)
+
+    def test_hidden_belt_placeholder_promotes_children_but_keeps_real_rings(self):
+        model = new_system_map(123)
+        apply_event(model, {"event": "Scan", "BodyID": 5, "StarType": "M", "BodyName": "Star"})
+        apply_event(model, {"event": "Scan", "BodyID": 16, "BodyName": "Star A Belt Cluster 1",
+                            "Parents": [{"Ring": 15}, {"Star": 5}]})
+        apply_event(model, {"event": "SAASignalsFound", "BodyID": 20, "BodyName": "Planet A Ring", "Signals": []})
+        page = render_map_page(_result(model, include_model=True))
+        self.assertNotIn('id="body-15"', page)
+        self.assertIn('id="body-16"', page)
+        self.assertIn('id="body-20"', page)
+        self.assertIn("15", model["nodes"])
+        model["nodes"]["15"]["event_data"] = {"Scan": {"BodyID": 15}}
+        self.assertIn('id="body-15"', render_map_page(_result(model, include_model=True)))
+
+    def test_stars_have_spectral_colors_and_distinct_icons(self):
+        for spectral, style in (("O", "spectral-o"), ("G", "spectral-g"), ("M", "spectral-m"),
+                                ("DAZ", "white-dwarf"), ("N", "neutron"), ("H", "black-hole"),
+                                ("C", "carbon-star"), ("unknown", "unknown-star")):
+            node = {"kind": "Star", "event_data": {"Scan": {"StarType": spectral}}}
+            self.assertEqual(star_style(node), "stellar " + style)
+        self.assertEqual(star_style({"kind": "Planet"}), "")
 
 
 if __name__ == "__main__":

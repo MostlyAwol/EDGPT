@@ -132,6 +132,20 @@ class SystemMapRenderingTests(unittest.TestCase):
 
 
 class SystemMapPersistenceTests(unittest.TestCase):
+    def test_schema_upgrade_recovers_previously_skipped_organic_scans(self):
+        self.write_events([event("ScanOrganic", Body=27, ScanType="Log", Species_Localised="Tussock")])
+        system_map_store.sync_system_maps()
+        with system_map_store._connect() as conn:
+            old = new_system_map(ADDRESS)
+            old["schema_version"] = 2
+            system_map_store._save_model(conn, old)
+            system_map_store._set_meta(conn, "schema_version", 2)
+            conn.commit()
+        saved = system_map_store.get_system_map(str(ADDRESS), include_model=True)
+        organic = saved["model"]["nodes"]["27"]["event_data"]["ScanOrganic"]
+        self.assertEqual(organic[0]["Species_Localised"], "Tussock")
+        self.assertEqual(system_map_store.sync_system_maps(), 0)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

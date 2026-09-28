@@ -2,7 +2,7 @@ import json
 from copy import deepcopy
 
 
-MAP_SCHEMA_VERSION = 2
+MAP_SCHEMA_VERSION = 3
 
 BODY_EVENT_TYPES = {
     "Scan",
@@ -59,6 +59,8 @@ def _event_system_name(event):
 
 def _body_id(event):
     value = event.get("BodyID")
+    if value is None and event.get("event") == "ScanOrganic":
+        value = event.get("Body")
     try:
         return int(value) if value is not None else None
     except (TypeError, ValueError):
