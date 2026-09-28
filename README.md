@@ -149,6 +149,9 @@ accurate normalized state when those raw fields are omitted.
 
 ## MCP tools
 
+Endpoint references: [State Engine HTTP API](docs/STATE_ENGINE_ENDPOINTS.md)
+and [MCP endpoint and tools](docs/MCP_ENDPOINTS.md).
+
 ```text
 get_elite_state
 get_full_loadout

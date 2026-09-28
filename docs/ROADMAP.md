@@ -10,6 +10,17 @@ be implemented exactly as written. Before starting an item, compare these notes
 with the current source tree, current Elite journal output, and lessons from
 the previously completed items.
 
+## Current status
+
+- Items 1-5 are complete; their implementation notes remain below for reference.
+- Items 6 (mission tracking) and 7 (materials and engineering readiness) remain
+  planned.
+- Item 8 is partially complete; confirm the remaining scope before implementation.
+- Former item 9 (route and expedition tracking) has moved to
+  [IDEAS.md](IDEAS.md) for further brainstorming; it is not planned work.
+- Colonisation tracking has been removed from the roadmap. Existing item numbers
+  are retained for stable references.
+
 ## Guiding principles
 
 - EDGPT remains an AI data bridge, not a replacement game client.
@@ -166,7 +177,7 @@ EDGPT normalizes the documented labels into stable PascalCase identifiers.
 
 ## 3. Health, capabilities, and real diagnostics
 
-Implemented: see [HEALTH.md](HEALTH.md). Tunnel connectivity remains explicitly
+**Status: completed.** See [HEALTH.md](HEALTH.md). Tunnel connectivity remains explicitly
 unverified; packaged runtime checks are part of the release checklist.
 
 ### Goal
@@ -422,6 +433,9 @@ material-trader conversions separately.
 
 ## 8. Exploration annotations and recommendations
 
+**Status: partially complete.** Reconcile the proposals below with the current
+implementation before choosing the remaining work.
+
 ### Goal
 
 Turn the existing system map into a practical exploration assistant while
@@ -463,103 +477,6 @@ MCP: get_saved_system_exploration
 - Recommendation rules are deterministic and tested.
 - Full raw event access remains available for verification.
 
-## 9. Route and expedition tracking
-
-### Goal
-
-Combine the live navigation route with historical travel into saved expedition
-progress and useful route warnings.
-
-### Inputs
-
-- `NavRoute.json` and route-related journal notifications;
-- `FSDJump`, `StartJump`, `FSDTarget`, `NavRoute`, and `NavRouteClear` where
-  confirmed by fixtures;
-- fuel, scoop, neutron/jet-cone, repair, and synthesis events;
-- system-map discoveries; and
-- optional user-defined waypoints and notes.
-
-### Derived state
-
-- current destination and remaining route systems;
-- completed/remaining jumps and distance;
-- route deviation and replot detection;
-- fuel and jump-range margin;
-- scoopable-star and low-fuel warnings;
-- neutron/white-dwarf boost status;
-- discoveries made during the expedition; and
-- elapsed time, travel rate, and estimated remaining time.
-
-### Proposed interfaces
-
-```text
-GET /route
-GET /expeditions
-GET /expeditions/get?id=...
-
-MCP: get_route_progress
-MCP: get_route_risks
-MCP: create_expedition
-MCP: get_expedition_summary
-```
-
-Any MCP tool that creates, edits, or deletes an expedition is a mutation and
-must be named/documented accordingly. Do not let an AI silently change routes
-or notes as a side effect of a read operation.
-
-### Completion criteria
-
-- Empty, cleared, replotted, and completed routes are tested.
-- Saved expeditions survive restarts and can be exported/imported.
-- Risk warnings state the observed data and rule that triggered them.
-
-## 10. Colonisation tracking
-
-### Goal
-
-Track colonisation projects, construction sites, required commodities, and the
-commander's contribution history.
-
-### Discovery work required first
-
-The colonisation journal surface is newer and may change. Before designing the
-schema, collect sanitized fixtures from project creation, docking, commodity
-delivery, construction progress, completion, and failure/abandonment. Compare
-them with current journal documentation and established community tools.
-
-### Candidate state
-
-- project/system identity and build type;
-- construction depot/station identity;
-- current construction phase and status;
-- required, delivered, and remaining commodities;
-- commander deliveries and contribution totals;
-- nearby relevant market information when available locally; and
-- last update time and source confidence.
-
-### Proposed interfaces
-
-```text
-GET /colonisation
-GET /colonisation/get?id=...
-
-MCP: get_colonisation_projects
-MCP: get_colonisation_requirements
-MCP: get_colonisation_delivery_plan
-```
-
-A delivery plan must distinguish observed inventory/market facts from suggested
-loads. External market data should be a separate optional integration with
-timestamps and source attribution.
-
-### Completion criteria
-
-- No quantity is inferred from cargo changes unless the inference is explicitly
-  labeled and tested.
-- Multiple simultaneous projects and depots remain separate.
-- Restart and missed-event reconciliation are defined.
-- Private project/activity data follows existing relay/privacy controls.
-
 ## 11. Streaming events and alerts
 
 ### Goal
@@ -587,7 +504,7 @@ window.
 - notable/high-value exploration discovery;
 - incomplete FSS/DSS work before a jump;
 - material/engineering goal reached;
-- cargo relevant to the current destination or colonisation project; and
+- cargo relevant to the current destination; and
 - unhealthy/stale EDGPT component.
 
 Alert rules should be deterministic, configurable, rate-limited, and visible
