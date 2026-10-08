@@ -92,7 +92,7 @@ class MapPageTests(unittest.TestCase):
             {"event": "Scan", "BodyID": 0, "BodyName": "Primary", "StarType": "K", "StellarMass": 0.8},
             {"event": "Scan", "BodyID": 1, "BodyName": "Planet <script>alert(1)</script>", "Parents": [{"Star": 0}],
              "PlanetClass": "Icy body", "DistanceFromArrivalLS": 0, "Radius": 1000000, "SurfaceGravity": 9.80665,
-             "OrbitalPeriod": 86400, "RotationPeriod": -43200, "SurfacePressure": 101325, "MassEM": 0.0001,
+             "OrbitalPeriod": 86400, "OrbitalInclination": 12.5, "RotationPeriod": -43200, "SurfacePressure": 101325, "MassEM": 0.0001,
              "WasDiscovered": False, "Landable": True, "Atmosphere": "thin atmosphere", "TerraformState": "Terraformable",
              "Rings": [{"Name": "Ring A", "RingClass": "eRingClass_Icy", "InnerRad": 2000000, "OuterRad": 3000000}],
              "Materials": [{"Name": "iron", "Percent": 20}], "Composition": {"Ice": 0.9}, "FutureField": {"Nested": [False, 0, "<img>"]}},
@@ -104,7 +104,8 @@ class MapPageTests(unittest.TestCase):
             apply_event(model, {"SystemAddress": 123, **event}, index)
         result = _result(model, include_model=True)
         page = render_map_page(result)
-        for content in ("1,000 km", "1 g", "1 d", "-0.5 d", "1 atm", "0.0001 M⊕", "Biological × 3",
+        for content in ("1,000 km", "1 g", "1 d", "-0.5 d", "Orbital inclination</span><strong>12.5 °",
+                        "Rotational period</span><strong>-0.5 d", "1 atm", "0.0001 M⊕", "Biological × 3",
                         "Landable", "Terraformable", "Surface mapped", "Undiscovered at scan", "Ring A", "iron 20 %",
                         "Test organism", "Test station", "Future Field", "&lt;img&gt;", "Composition"):
             self.assertIn(content, page)

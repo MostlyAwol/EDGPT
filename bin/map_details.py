@@ -118,7 +118,9 @@ def body_card(node):
         ("Mass", "MassEM", 1, "M⊕"), ("Mass", "StellarMass", 1, "M☉"),
         ("Radius", "Radius", 1000, "km"), ("Gravity", "SurfaceGravity", 9.80665, "g"),
         ("Temperature", "SurfaceTemperature", 1, "K"),
-        ("Orbit", "OrbitalPeriod", 86400, "d"), ("Rotation", "RotationPeriod", 86400, "d"),
+        ("Orbital period", "OrbitalPeriod", 86400, "d"),
+        ("Orbital inclination", "OrbitalInclination", 1, "°"),
+        ("Rotational period", "RotationPeriod", 86400, "d"),
         ("Semi-major axis", "SemiMajorAxis", 299792458, "ls"),
         ("Pressure", "SurfacePressure", 101325, "atm"), ("Age", "Age_MY", 1, "Myr"),
     ):

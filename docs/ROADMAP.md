@@ -13,8 +13,8 @@ the previously completed items.
 ## Current status
 
 - Items 1-5 are complete; their implementation notes remain below for reference.
-- Items 6 (mission tracking) and 7 (materials and engineering readiness) remain
-  planned.
+- Item 5A (compact system overview state), item 6 (mission tracking), and item 7
+  (materials and engineering readiness) remain planned.
 - Item 8 is partially complete; confirm the remaining scope before implementation.
 - Former item 9 (route and expedition tracking) has moved to
   [IDEAS.md](IDEAS.md) for further brainstorming; it is not planned work.
@@ -331,6 +331,304 @@ history event watermark and model schema version.
 - Restarting EDGPT does not split or duplicate a session.
 - A compact summary stays useful without raw-event expansion.
 - Important totals link back to source event ranges for investigation.
+
+## 5A. Compact system overview state
+
+### Goal
+
+Provide a compact, LLM-oriented summary of the current system map that gives an
+AI enough context to understand the system without sending the complete map or
+raw scan history. The output should emphasize broad system composition and only
+include optional sections when they contain useful information.
+
+This state is intended to be cheap enough to include as situational context while
+remaining rich enough for an AI client to recognize when the current system is
+materially different from an ordinary one. It should be derived entirely from the
+existing full system map rather than maintaining a second independent source of
+truth.
+
+### Proposed output
+
+The state should be rendered as a small human-readable summary with a stable
+section order. A representative result could look like:
+
+```markdown
+# Juenio IM-V e2-5189
+
+35 of 35 bodies known
+
+## Stars
+
+| Type | Count |
+| --- | ---: |
+| B (Blue-White) Star | 1 |
+| T (Brown dwarf) Star | 1 |
+
+## Planets
+
+| Type | Count |
+| --- | ---: |
+| Rocky body | 23 |
+| High metal content world | 6 |
+| Class IV gas giant | 4 |
+
+## Rings
+
+| Type | Count |
+| --- | ---: |
+| Rocky | 6 |
+| Metal Rich | 2 |
+
+## Exobiology
+
+- 3 biological signals across 3 bodies
+- Estimated value: up to 4.5M cr
+
+## Curiosities
+
+- 2 + 3 · close binary planets · surface-to-surface separation: 1,240 km
+- 6 B Ring · nearby moon with a highly inclined orbit
+```
+
+The exact wording of generated prose may evolve, but the underlying information
+should remain deterministic and derived from the system map.
+
+### Core sections
+
+The first implementation should support these sections:
+
+- **Stars**: grouped counts by stellar type;
+- **Planets**: grouped counts by planet/body type;
+- **Rings**: grouped counts by ring composition/type;
+- **Exobiology**: only when biological signals or known exobiology information
+  exist; and
+- **Curiosities**: only when the curiosities module returns one or more entries.
+
+Do not include empty sections. The summary should not include first-discovery or
+first-mapped ownership information unless a later use case justifies adding it.
+Do not append a second generic totals block when the same information is already
+clear from the sections above.
+
+### Completion and body counts
+
+When the system map has a reliable expected-body count, include a compact line
+such as `35 of 35 bodies known` directly below the system name. If the expected
+count is unavailable or ambiguous, omit the line rather than guessing.
+
+The grouped tables should reflect the bodies currently represented in the merged
+system map and should not require access to raw journal events at render time.
+
+### Generation, persistence, and refresh lifecycle
+
+This summary is not a continuously rebuilt view of every partially scanned system.
+Its initial creation is gated by Frontier's `FSSAllBodiesFound` journal event so
+Nova does not receive or persist a "complete-system" summary before the game has
+confirmed that all bodies in the system have been found.
+
+Initial generation should work as follows:
+
+1. Journal ingestion receives `FSSAllBodiesFound` for the current system.
+2. Resolve the complete merged system map for that system.
+3. Build the Stars, Planets, Rings, and optional Exobiology sections from that map.
+4. Call `find_curiosities(system_map)` with the complete map.
+5. Omit `Curiosities` when the returned list is empty; otherwise append the
+   returned strings in deterministic order.
+6. Save the resulting compact summary as derived state associated with that
+   system.
+
+Do not create this compact-summary state merely because the player enters a new
+system, performs an individual scan, or opens an incomplete system map. Before
+`FSSAllBodiesFound` has fired for a system and no previously completed summary is
+available, the compact summary should be considered unavailable rather than an
+empty or partial summary.
+
+The summary must persist across sessions so it remains available when the player
+returns to a previously completed system. Persistence should key the summary to
+the same stable system identity used by the system-map store and retain enough
+schema/version information to rebuild it safely when the representation changes.
+The complete saved system map remains the source of truth; the compact summary is
+rebuildable derived state.
+
+Curiosities are intentionally refreshed more aggressively than the rest of the
+summary because their rules are expected to evolve independently. Whenever EDGPT
+loads a previously completed system for a return visit, or a client retrieves a
+saved system summary, it should:
+
+1. load the saved complete system map;
+2. run the current `find_curiosities(system_map)` implementation again;
+3. replace the saved Curiosities result with the newly returned list, including
+   removing the section when the new result is empty;
+4. rebuild the rendered compact summary from the saved map and refreshed
+   curiosities; and
+5. persist the refreshed derived summary before returning it.
+
+This means a new or changed curiosity detector can update old completed systems
+without replaying their original journals or requiring the whole summary feature
+to be rewritten. The refresh must never mutate the saved full system map.
+
+### Exobiology section
+
+The exobiology section should be compact and factual. It may include:
+
+- number of bodies with biological signals;
+- total biological signal count when meaningful;
+- known genera/species when already present in the map; and
+- an estimated value only when the existing data is sufficient to support the
+  estimate and the formula/version is identifiable.
+
+Do not fabricate species from signal counts. If only spawn-rule estimates are
+available, label them clearly as estimates. If no biological information exists,
+omit the section entirely.
+
+### Curiosities module
+
+Curiosities must be implemented as a small independent module rather than as a
+large set of rules embedded in the system-summary renderer. The summary builder
+should call the module, receive zero or more already formatted curiosity strings,
+and render them only when the returned list is non-empty.
+
+The initial interface should be deliberately simple:
+
+```python
+def find_curiosities(system_map) -> list[str]:
+    return []
+```
+
+Requirements:
+
+- input is the complete merged system map for the current system;
+- output is a deterministic `list[str]`;
+- the initial implementation intentionally returns an empty list;
+- an empty list means the `Curiosities` section is omitted;
+- the system-summary renderer must not contain curiosity-specific detection logic;
+- adding, removing, or changing curiosity rules should normally require edits only
+  inside the curiosities module and its tests; and
+- curiosity rules must not mutate the supplied system map.
+
+The module should be structured so individual curiosity checks can later be
+added or removed without rewriting the dispatcher or summary renderer. A simple
+internal rule registry or ordered list of detector functions is sufficient; a
+full plugin framework is unnecessary at this stage.
+
+For example, a later implementation might internally resemble:
+
+```python
+CURIOSITY_RULES = [
+    detect_close_binary_planets,
+    detect_close_nested_moons,
+    detect_interesting_ring_moon_geometry,
+]
+
+def find_curiosities(system_map) -> list[str]:
+    results = []
+    for rule in CURIOSITY_RULES:
+        results.extend(rule(system_map))
+    return results
+```
+
+The example rule names document intended extensibility only. They are not part of
+the initial completion requirement.
+
+### Future curiosity rules
+
+Curiosity detection should be reserved for genuinely notable geometry or system
+relationships rather than ordinary classifications. Candidate future rules
+include:
+
+- unusually close binary planets using surface-to-surface separation rather than
+  centre-to-centre distance alone;
+- nested moons only when the geometry produces an unusually close or otherwise
+  notable relationship;
+- unusually wide rings only when another body makes the geometry interesting,
+  such as a nearby moon or a close moon on a highly inclined orbit; and
+- other deterministic system relationships that are useful enough to justify
+  drawing an AI client's attention.
+
+Thresholds and rule semantics should live with the individual curiosity detector
+rather than in the renderer. Each rule should explain enough in its returned text
+for an LLM to understand why the feature was surfaced.
+
+### Proposed interfaces
+
+Expose the compact state separately from the existing simple/full system-map
+representations so current clients remain compatible:
+
+```text
+GET /system-map/summary
+
+MCP: get_current_system_summary
+MCP: get_saved_system_summary
+```
+
+The saved-system form should use the same builder and curiosities module as the
+current-system form. Retrieving a saved summary must perform the Curiosities
+refresh described above and save the refreshed derived state before returning it.
+Do not duplicate summary semantics between HTTP and MCP.
+
+### Rendering and API behavior
+
+- Build the summary from the shared merged system-map model.
+- Do not initially create the summary until `FSSAllBodiesFound` fires for that
+  system.
+- Return a previously persisted completed summary on a return visit, after
+  refreshing Curiosities from the saved full map.
+- Keep section ordering stable and deterministic.
+- Omit empty optional sections rather than emitting placeholders such as `None`.
+- Keep tables and prose compact enough for routine LLM context.
+- Preserve the full map endpoints/tools for clients that need body-level detail.
+- Treat this as a derived representation, not a replacement for the existing
+  simple or full map.
+- If a machine-readable form is also exposed, derive it from the same intermediate
+  summary model used by the Markdown/text renderer.
+
+### Testing requirements
+
+Add fixtures covering:
+
+- no compact summary being created before `FSSAllBodiesFound`;
+- summary creation and persistence when `FSSAllBodiesFound` fires;
+- an ordinary complete system containing stars and planets only;
+- systems with and without rings;
+- systems with and without biological signals;
+- incomplete maps where expected body count is known;
+- maps where expected body count is unavailable;
+- deterministic grouping/order of star, planet, and ring types;
+- omission of empty `Exobiology` and `Curiosities` sections;
+- a curiosities module returning an empty list;
+- a test stub curiosities module returning multiple strings in deterministic order;
+- a return visit loading a persisted completed system, rerunning Curiosities, and
+  saving the refreshed summary;
+- a saved-system retrieval rerunning Curiosities and persisting changed results;
+- a Curiosities refresh that changes from non-empty to empty and therefore removes
+  the section;
+- confirmation that Curiosities refresh does not mutate the saved full map; and
+- HTTP and MCP returning equivalent summary content for the same map.
+
+Curiosity-rule tests should remain separate from summary-rendering tests so new
+rules can be added without rewriting unrelated renderer fixtures.
+
+### Completion criteria
+
+- A compact summary is first created only after `FSSAllBodiesFound` fires for the
+  system.
+- Completed summaries are persisted and remain available across restarts and
+  return visits.
+- Current and saved completed system maps can be rendered through one shared
+  compact-summary builder.
+- Stars, planets, and rings are grouped correctly and deterministically.
+- Empty optional sections are omitted.
+- Exobiology is included only when supported by map data and estimates are clearly
+  identified.
+- The curiosities module accepts the full system map and returns `list[str]`.
+- The initial curiosities implementation returns an empty list.
+- Loading a completed system on a return visit or retrieving a saved summary
+  reruns Curiosities against the saved full map and persists the refreshed result.
+- The renderer contains no curiosity-specific detection rules.
+- Adding a new curiosity detector can be done without changing the summary builder
+  or transport code.
+- HTTP and MCP use the same implementation and remain compatible with existing
+  system-map interfaces.
+
 
 ## 6. Mission tracking
 
