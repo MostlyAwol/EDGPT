@@ -13,9 +13,28 @@ from history_store import (
 from current_state import build_state, read_json_file, list_live_json
 from system_map_store import get_current_system_map, get_system_map, list_system_maps
 import session_store
+from system_map_store import get_system_summary
 
 mcp = FastMCP("Elite Dangerous Full Context", stateless_http=True, json_response=True,
               host="127.0.0.1", port=int(os.environ.get("EDGPT_MCP_PORT", "8000")))
+
+
+@mcp.tool()
+def get_current_system_summary() -> dict:
+    """Read the compact current-system overview: grouped bodies/rings and recorded biology.
+
+    Available only after FSSAllBodiesFound; returns {} otherwise. Refreshes and
+    saves derived curiosities from the merged map. Use full map tools for detail.
+    """
+    return get_system_summary() or {}
+
+
+@mcp.tool()
+def get_saved_system_summary(system: str) -> dict:
+    """Read a completed system overview by name or SystemAddress, refreshing saved
+    derived curiosities. Returns {} if unknown or not confirmed by FSSAllBodiesFound.
+    """
+    return get_system_summary(system) or {}
 
 
 def build_current_state():

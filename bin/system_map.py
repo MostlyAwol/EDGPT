@@ -208,7 +208,7 @@ def apply_event(model, event, event_id=0):
             arrival = _node(model, arrival_id)
             arrival["name"] = event.get("Body") or arrival["name"]
             arrival["kind"] = event.get("BodyType") or "Star"
-            if arrival["kind"] == "Star":
+            if arrival["kind"] == "Star" and "Scan" not in arrival["event_data"]:
                 arrival["body_type"] = "Star"
             arrival["distance_ls"] = 0.0
             arrival["parent_id"] = None

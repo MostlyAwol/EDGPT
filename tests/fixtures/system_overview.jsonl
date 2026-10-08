@@ -1,0 +1,9 @@
+{"timestamp":"2026-01-01T00:00:00Z","event":"FSDJump","StarSystem":"Overview","SystemAddress":123,"Body":"Overview A","BodyID":0,"BodyType":"Star"}
+{"timestamp":"2026-01-01T00:00:01Z","event":"Scan","SystemAddress":123,"BodyName":"Overview A","BodyID":0,"StarType":"K","Parents":[]}
+{"timestamp":"2026-01-01T00:00:02Z","event":"Scan","SystemAddress":123,"BodyName":"Overview 1","BodyID":1,"PlanetClass":"Rocky body","Parents":[{"Star":0}],"Rings":[{"Name":"Overview 1 A Ring","RingClass":"eRingClass_Rocky"}]}
+{"timestamp":"2026-01-01T00:00:03Z","event":"Scan","SystemAddress":123,"BodyName":"Overview 1 a","BodyID":2,"PlanetClass":"Rocky body","Parents":[{"Planet":1},{"Star":0}]}
+{"timestamp":"2026-01-01T00:00:04Z","event":"FSSDiscoveryScan","SystemAddress":123,"BodyCount":3}
+{"timestamp":"2026-01-01T00:00:05Z","event":"FSSBodySignals","SystemAddress":123,"BodyID":1,"Signals":[{"Type":"$SAA_SignalType_Biological;","Count":2}]}
+{"timestamp":"2026-01-01T00:00:06Z","event":"SAASignalsFound","SystemAddress":123,"BodyID":1,"Signals":[{"Type":"$SAA_SignalType_Biological;","Count":2}],"Genuses":[{"Genus":"$Codex_Ent_Stratum;","Genus_Localised":"Stratum"}]}
+{"timestamp":"2026-01-01T00:00:07Z","event":"ScanOrganic","SystemAddress":123,"Body":1,"ScanType":"Log","Genus_Localised":"Stratum","Species_Localised":"Stratum Tectonicas"}
+{"timestamp":"2026-01-01T00:00:08Z","event":"FSSAllBodiesFound","SystemAddress":123,"SystemName":"Overview","Count":3}

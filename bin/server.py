@@ -11,6 +11,7 @@ from current_state import build_state
 from map_page import render_map_page
 from system_map_store import get_current_system_map, get_system_map, list_system_maps
 from session_store import get_current_session_summary, get_game_session, list_game_sessions
+from system_map_store import get_system_summary
 
 if __name__ == "__main__" and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -164,6 +165,12 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 limit = 200
             return send_json(self, search_events(query, event, start, end, limit))
+
+        if path == "/system-map/summary":
+            if any(key != "system" or len(values) != 1 or not values[0].strip()
+                   for key, values in qs.items()):
+                return send_json(self, {"error": "Specify system once as a name or SystemAddress."}, 400)
+            return send_json(self, get_system_summary(qs.get("system", [None])[0]) or {})
 
         if path == "/system-map/simple":
             return send_json(self, get_current_system_map(include_full=False) or {})

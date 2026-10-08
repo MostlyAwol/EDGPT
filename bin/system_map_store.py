@@ -9,7 +9,9 @@ from history_store import (
     get_system_map_event_batch,
     history_max_event_id,
     history_generation,
+    latest_state_events,
 )
+from system_summary import build_system_summary, SUMMARY_SCHEMA_VERSION
 from system_map import (
     MAP_SCHEMA_VERSION,
     apply_event,
@@ -60,6 +62,11 @@ def init_db():
             CREATE TABLE IF NOT EXISTS map_meta (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS system_summaries (
+                system_address INTEGER PRIMARY KEY,
+                schema_version INTEGER NOT NULL,
+                summary_json TEXT NOT NULL
             );
             """
         )
@@ -135,6 +142,7 @@ def sync_system_maps(*, sync_history=True):
         if (stored_version != MAP_SCHEMA_VERSION or cursor > high_watermark
                 or _meta(conn, "history_generation") != generation):
             conn.execute("DELETE FROM system_maps")
+            conn.execute("DELETE FROM system_summaries")
             conn.execute("DELETE FROM map_meta")
             cursor = 0
             _set_meta(conn, "schema_version", MAP_SCHEMA_VERSION)
@@ -147,6 +155,7 @@ def sync_system_maps(*, sync_history=True):
                 break
 
             models = {}
+            refresh = set()
             for item in batch:
                 event = item["data"]
                 try:
@@ -158,6 +167,8 @@ def sync_system_maps(*, sync_history=True):
                     name = event.get("SystemName") or event.get("StarSystem") or ""
                     models[address] = _load_model(conn, address, name)
                 apply_event(models[address], event, item["id"])
+                if event.get("event") in ("FSSAllBodiesFound", "FSDJump"):
+                    refresh.add(address)
                 if event.get("event") == "FSDJump":
                     _set_meta(conn, "current_system_address", address)
                 cursor = max(cursor, int(item["id"]))
@@ -165,13 +176,62 @@ def sync_system_maps(*, sync_history=True):
 
             for model in models.values():
                 _save_model(conn, model)
+                if model["system_address"] in refresh:
+                    _save_summary(conn, model)
             _set_meta(conn, "history_event_id", cursor)
 
         _set_meta(conn, "history_generation", generation)
         _set_meta(conn, "history_event_id", high_watermark)
         _set_meta(conn, "schema_version", MAP_SCHEMA_VERSION)
+        # Adopt this feature on existing map databases without journal replay.
+        rows = conn.execute(
+            "SELECT m.map_json FROM system_maps m LEFT JOIN system_summaries s "
+            "ON m.system_address=s.system_address WHERE m.known_complete=1 "
+            "AND (s.system_address IS NULL OR s.schema_version!=?)",
+            (SUMMARY_SCHEMA_VERSION,),
+        ).fetchall()
+        for row in rows:
+            _save_summary(conn, json.loads(row["map_json"]))
         conn.commit()
     return processed
+
+
+def _save_summary(conn, model):
+    summary = build_system_summary(model)
+    if summary is not None:
+        conn.execute(
+            "INSERT INTO system_summaries VALUES(?,?,?) ON CONFLICT(system_address) "
+            "DO UPDATE SET schema_version=excluded.schema_version, summary_json=excluded.summary_json",
+            (model["system_address"], SUMMARY_SCHEMA_VERSION,
+             json.dumps(summary, ensure_ascii=False, separators=(",", ":"))),
+        )
+    return summary
+
+
+def get_system_summary(identifier=None):
+    """Refresh and persist a completed current/saved overview from the full map."""
+    sync_system_maps()
+    if identifier is None:
+        locations = latest_state_events(("Location", "FSDJump", "CarrierJump"), sync=False)
+        location = next((event for event in reversed(locations)
+                         if event.get("SystemAddress") is not None), None)
+        if location:
+            identifier = location["SystemAddress"]
+    with _LOCK, _connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        if identifier is None:
+            identifier = _meta(conn, "current_system_address")
+        try:
+            address = int(str(identifier).strip())
+            row = conn.execute("SELECT map_json FROM system_maps WHERE system_address=?", (address,)).fetchone()
+        except (TypeError, ValueError):
+            row = conn.execute(
+                "SELECT map_json FROM system_maps WHERE system_name=? COLLATE NOCASE "
+                "ORDER BY last_updated DESC LIMIT 1", (str(identifier or "").strip(),),
+            ).fetchone()
+        summary = _save_summary(conn, json.loads(row["map_json"])) if row else None
+        conn.commit()
+        return summary
 
 
 def _result(model, include_full=False, *, include_model=False):

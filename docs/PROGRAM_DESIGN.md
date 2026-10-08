@@ -423,4 +423,9 @@ When returning to the repository later:
 
 ## Health and discovery update
 
+Compact system overviews use `bin/system_summary.py` and the independent
+`bin/curiosities.py` registry, persisted by `system_map_store.py` alongside the
+full maps. They are gated by retained `FSSAllBodiesFound` and exposed separately
+through shared HTTP/MCP interfaces. See [SYSTEM_SUMMARIES.md](SYSTEM_SUMMARIES.md).
+
 `bin/diagnostics.py` owns shared health and capability contracts. The state server runs a background indexing worker. MCP and launcher CHECK use endpoint probes. See [HEALTH.md](HEALTH.md) for statuses, privacy, timing and integration limitations.

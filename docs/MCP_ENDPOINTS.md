@@ -14,7 +14,7 @@ contain private commander information and local database paths.
 
 The tables describe tool return values; the MCP SDK wraps these in protocol
 results. Arguments with defaults are optional; other arguments are required.
-There are 21 registered tools. For plain HTTP requests, see
+The complete tool list is also exposed by `get_edgpt_capabilities`. For plain HTTP requests, see
 [State Engine endpoints](STATE_ENGINE_ENDPOINTS.md).
 
 ## State and live files
@@ -105,6 +105,12 @@ These are successful text results, not tool errors. HTTP map endpoints instead
 return JSON objects containing metadata and rendered text.
 
 ## Diagnostics
+
+Compact overviews are available through `get_current_system_summary()` and
+`get_saved_system_summary(system: str)` (name or SystemAddress). They return
+the same structured overview as HTTP, including `summary_text`, or `{}` until
+`FSSAllBodiesFound` is recorded. Reads refresh and persist derived curiosities.
+See [SYSTEM_SUMMARIES.md](SYSTEM_SUMMARIES.md).
 
 | Tool | Arguments | Return value |
 | --- | --- | --- |

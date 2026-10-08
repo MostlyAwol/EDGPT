@@ -16,13 +16,14 @@ _observations = {}
 _lock = threading.Lock()
 ENDPOINTS = ["/", "/state", "/health", "/capabilities", "/version", "/history/summary",
              "/history/recent", "/history/search", "/system-map/simple", "/system-map/full",
-             "/system-maps", "/system-maps/get", "/sessions", "/sessions/current", "/sessions/get"]
+             "/system-maps", "/system-maps/get", "/system-map/summary", "/sessions", "/sessions/current", "/sessions/get"]
 TOOLS = ["get_elite_state", "get_full_loadout", "get_navroute", "get_status",
          "list_elite_live_files", "get_elite_live_file", "get_recent_events", "search_journal",
          "get_latest_journal_event", "get_history_summary", "get_raw_history_page",
          "get_current_system_map_simple", "get_current_system_map_full", "list_saved_system_maps",
          "get_saved_system_map_simple", "get_saved_system_map_full", "get_edgpt_health",
-         "get_edgpt_capabilities", "get_current_session_summary", "list_game_sessions", "get_game_session"]
+         "get_edgpt_capabilities", "get_current_session_summary", "list_game_sessions", "get_game_session",
+         "get_current_system_summary", "get_saved_system_summary"]
 
 
 def version():
@@ -41,11 +42,12 @@ def integrations():
 
 def capabilities():
     return {**version(), "http_endpoints": ENDPOINTS, "mcp_tools": TOOLS,
-            "state_models": ["current_state", "journal_history", "system_maps", "sessions"],
+            "state_models": ["current_state", "journal_history", "system_maps", "sessions", "system_summaries"],
+            "system_summary_schema_version": 1,
             "session_schema_version": 1,
             "limits": {"events": 5000, "saved_system_maps": 1000, "sessions": 100, "session_activity_examples": 20},
             "response_profiles": {"state": ["compact", "history_summary", "recent_events", "loadout", "live_files"],
-                                  "system_maps": ["simple", "full"]},
+                                  "system_maps": ["simple", "full", "summary"]},
             "optional_integrations": integrations(), "transports": ["http", "mcp_streamable_http"]}
 
 

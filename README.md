@@ -172,6 +172,8 @@ get_current_system_map_full
 list_saved_system_maps
 get_saved_system_map_simple
 get_saved_system_map_full
+get_current_system_summary
+get_saved_system_summary
 ```
 
 `Status.json` responses preserve Frontier's numeric `Flags` and `Flags2` while
@@ -186,6 +188,13 @@ by `SystemAddress`. EDGPT backfills maps from indexed historical journals and
 merges later visits into the existing map. Compact tools return a body tree
 with types and arrival distances; full tools include all retained scan and
 signal event data.
+
+Compact system overviews are available at `/system-map/summary` and through
+`get_current_system_summary` / `get_saved_system_summary`. They group stars,
+planets and rings, with recorded biology when available. Summaries become
+available after `FSSAllBodiesFound`, persist across visits, and refresh derived
+curiosities when retrieved. Use `?system=...` for a saved name or SystemAddress.
+See [the overview contract](docs/SYSTEM_SUMMARIES.md).
 
 ## Full Context history
 

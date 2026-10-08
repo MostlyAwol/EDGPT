@@ -154,6 +154,8 @@ with patch.object(socket.socket, 'bind', side_effect=AssertionError('listener on
         asyncio.run(check())
 
     def test_mcp_client_over_http(self):
+        self.append([{"event": "FSSAllBodiesFound", "SystemAddress": 200,
+                      "SystemName": "Destination", "Count": 1}])
         from mcp import ClientSession
         from mcp.client.streamable_http import streamable_http_client
         with socket.socket() as sock:
@@ -183,6 +185,13 @@ with patch.object(socket.socket, 'bind', side_effect=AssertionError('listener on
                         result = await session.call_tool("get_elite_state", {})
                         self.assertFalse(result.isError)
                         self.assertIn("Destination", str(result.content))
+                        overview = await session.call_tool("get_current_system_summary", {})
+                        self.assertFalse(overview.isError)
+                        overview_data = json.loads(overview.content[0].text)
+                        self.assertEqual(overview_data["system_name"], "Destination")
+                        saved_overview = await session.call_tool("get_saved_system_summary", {"system": "200"})
+                        self.assertFalse(saved_overview.isError)
+                        self.assertEqual(json.loads(saved_overview.content[0].text), overview_data)
                         current = await session.call_tool("get_current_session_summary", {})
                         self.assertFalse(current.isError)
                         data = json.loads(current.content[0].text)

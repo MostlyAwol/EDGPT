@@ -28,6 +28,7 @@ application authentication; responses can contain private commander data.
 | `/sessions/get` | `id` (required) | Saved session; 404 if unknown. |
 | `/system-map/simple` | None | Current map metadata and `simple_text`; `{}` if unavailable. |
 | `/system-map/full` | None | Current map metadata, `simple_text`, and `full_text`; `{}` if unavailable. |
+| `/system-map/summary` | Optional `system` name/address; current system by default | Completed compact overview including `summary_text`; `{}` before completion or if unknown. |
 | `/system-maps` | `q=""`, `limit=100` | Saved map metadata, latest update first; `q` filters system names. |
 | `/system-maps/get` | `system` (name or numeric SystemAddress), `detail=simple` | Saved map; `detail=full` adds `full_text`; 404 if not found. |
 | `/map` | Optional `system` (numeric SystemAddress only) | HTML system map, refreshed every five seconds; omit `system` to follow location. |
@@ -74,6 +75,11 @@ Separate queries and live files do not form an atomic game snapshot. See
 [STATE_FOUNDATION.md](STATE_FOUNDATION.md) for reduction and recovery details.
 
 ## History, sessions, and maps
+
+Compact overviews use the shared summary builder and persist only after a retained
+`FSSAllBodiesFound`. Reads refresh and save derived curiosities without changing
+the full map. The optional `system` parameter must be nonblank and specified
+once; unknown parameters return 400. See [SYSTEM_SUMMARIES.md](SYSTEM_SUMMARIES.md).
 
 History counts and search limits are clamped to 1–5,000. Noninteger HTTP
 `count`/`limit` values fall back to the route default. Search `event` is an

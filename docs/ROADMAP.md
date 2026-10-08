@@ -12,8 +12,8 @@ the previously completed items.
 
 ## Current status
 
-- Items 1-5 are complete; their implementation notes remain below for reference.
-- Item 5A (compact system overview state), item 6 (mission tracking), and item 7
+- Items 1-5 and 5A are complete; their implementation notes remain below for reference.
+- Item 6 (mission tracking) and item 7
   (materials and engineering readiness) remain planned.
 - Item 8 is partially complete; confirm the remaining scope before implementation.
 - Former item 9 (route and expedition tracking) has moved to
@@ -334,6 +334,12 @@ history event watermark and model schema version.
 
 ## 5A. Compact system overview state
 
+**Status: completed on 2026-10-08.** Shared HTTP/MCP summaries are gated by
+`FSSAllBodiesFound`, persist alongside maps, and refresh curiosities on return
+visits and retrieval. The initial detector registry is empty as specified.
+Synthetic fixtures cover lifecycle, grouping, optional sections and transports.
+See [SYSTEM_SUMMARIES.md](SYSTEM_SUMMARIES.md) for the contract and recovery.
+
 ### Goal
 
 Provide a compact, LLM-oriented summary of the current system map that gives an
@@ -530,6 +536,10 @@ The example rule names document intended extensibility only. They are not part o
 the initial completion requirement.
 
 ### Future curiosity rules
+
+Dedicated detector planning now lives in
+[CURIOSITIES_ROADMAP.md](CURIOSITIES_ROADMAP.md), including the initial priorities,
+additional candidates, geometry limitations, and validation requirements.
 
 Curiosity detection should be reserved for genuinely notable geometry or system
 relationships rather than ordinary classifications. Candidate future rules
