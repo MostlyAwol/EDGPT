@@ -53,10 +53,13 @@ in this version because the map lacks a versioned valuation model.
 
 `bin/system_summary.py` owns the intermediate representation and renderer.
 `bin/curiosities.py` exposes `find_curiosities(system_map) -> list[str]` through
-an ordered rule registry with close binary pair and ringed-parent moon detectors.
-Both use a strict `< CLOSE_DISTANCE_KM` proximity threshold, initially 2000 km,
-editable near the top of `bin/curiosities.py`. Results include surface clearances
-or radial surface-to-ring-edge clearances in km and identify orbital estimates.
+an ordered rule registry with close binary pairs, ringed-parent/inclined moons,
+nested moons and ringed ancestors, stellar relationships, possible green gas
+giants, and combined unusual body properties. Absolute proximity uses a strict
+`< CLOSE_DISTANCE_KM` threshold, initially 2000 km. Binary pairs can also qualify
+by body-relative size; additional defaults are named constants near the top of
+`bin/curiosities.py`. Results report factual data, surface/radial clearances,
+periapsis/apoapsis, or labelled conservative bounds, without threshold text.
 See the curiosity roadmap for formulas and geometry limitations. Detector results
 retain rule order. Detectors must not mutate inputs; the builder also supplies
 a copy of the map to protect the source of truth.

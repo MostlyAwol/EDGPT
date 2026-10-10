@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Completed the initial curiosity detector families and additional exploration
+  categories: body-relative close binaries, nested moons and ringed ancestors,
+  inclined/polar moons, nearby stellar relationships, selective possible green
+  gas giants, short/eccentric orbits, ringed terrestrial bodies, landable extremes,
+  and unusual spin/orbit properties. Match descriptions report factual values
+  and combine related ring, inclination and recorded biology details. Added
+  sourced GGG examples, boundary/invalid-data tests and partial-map refresh checks.
+
 - Implemented roadmap 5A: persistent compact system overviews for partial and
   complete maps, with grouped stars/planets/rings, recorded exobiology,
   and an independent initially empty curiosity registry. Added

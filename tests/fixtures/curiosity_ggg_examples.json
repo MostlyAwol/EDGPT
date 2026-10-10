@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Boelts QJ-Y d1-1149 5",
+    "source": "https://ed-ggg.github.io/edggg/planets/ggg39/",
+    "candidate": true,
+    "scan": {"PlanetClass": "Gas giant with water-based life", "SurfaceTemperature": 176.666656, "MassEM": 19.0608, "Radius": 28011000}
+  },
+  {
+    "name": "Thaileia PJ-O d7-74 D 3",
+    "source": "https://ed-ggg.github.io/edggg/planets/ggg42/",
+    "candidate": true,
+    "scan": {"PlanetClass": "Gas giant with water-based life", "SurfaceTemperature": 176.666641, "MassEM": 273.4926, "Radius": 70644000}
+  },
+  {
+    "name": "Cyoilz JM-N b26-0 1",
+    "source": "https://ed-ggg.github.io/edggg/planets/ggg72/",
+    "candidate": true,
+    "scan": {"PlanetClass": "Gas giant with water-based life", "SurfaceTemperature": 242.000015, "MassEM": 1084.209, "Radius": 77259000}
+  },
+  {
+    "name": "Synthetic adjacent temperature negative",
+    "source": "Synthetic counterpart to ggg39; not an observed system",
+    "candidate": false,
+    "scan": {"PlanetClass": "Gas giant with water-based life", "SurfaceTemperature": 176.666626, "MassEM": 19.0608, "Radius": 28011000}
+  },
+  {
+    "name": "Synthetic low density negative",
+    "source": "Synthetic counterpart to ggg39; not an observed system",
+    "candidate": false,
+    "scan": {"PlanetClass": "Gas giant with water-based life", "SurfaceTemperature": 176.666656, "MassEM": 0.1, "Radius": 28011000}
+  }
+]

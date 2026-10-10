@@ -215,6 +215,29 @@ class SummaryPersistenceTests(unittest.TestCase):
         with maps._connect() as conn:
             self.assertEqual(original, conn.execute("SELECT map_json FROM system_maps WHERE system_address=123").fetchone()[0])
 
+    def test_saved_partial_map_refreshes_extended_curiosity_rules(self):
+        def scan(body_id, parents, **fields):
+            return {"event": "Scan", "SystemAddress": 123, "BodyID": body_id,
+                    "BodyName": f"Overview {body_id}", "PlanetClass": "Rocky body",
+                    "Parents": parents, "Radius": 100000, "SemiMajorAxis": 1500000,
+                    "Eccentricity": 0, "Landable": True, **fields}
+        self.write([
+            scan(30, [{"Star": 0}], Radius=1000000),
+            scan(31, [{"Planet": 30}, {"Star": 0}], Radius=500000,
+                 Rings=[{"Name": "Overview 31 A Ring", "InnerRad": 1000000, "OuterRad": 2000000}]),
+            scan(32, [{"Planet": 31}, {"Planet": 30}, {"Star": 0}], OrbitalInclination=90),
+            scan(33, [{"Star": 0}], PlanetClass="Class III gas giant", SurfaceTemperature=640),
+        ], append=True)
+        with patch.object(curiosities, "CURIOSITY_RULES", ()):
+            maps.sync_system_maps()
+            self.assertEqual(self.persisted()["curiosities"], [])
+        with patch.object(maps, "sync_system_maps"):
+            summary = maps.get_system_summary(123)
+        self.assertFalse(summary["all_bodies_found"])
+        self.assertIn("Highly inclined close nested moon", summary["summary_text"])
+        self.assertIn("Possible green gas giant", summary["summary_text"])
+        self.assertEqual(summary, self.persisted())
+
     def test_current_location_does_not_return_previous_system(self):
         self.write([EVENTS[-1], {"event": "Location", "SystemAddress": 999, "StarSystem": "Unknown"}], append=True)
         self.assertIsNone(maps.get_system_summary())
