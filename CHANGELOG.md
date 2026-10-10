@@ -2,11 +2,14 @@
 
 ## Unreleased
 
-- Implemented roadmap 5A: persistent compact system overviews, gated by
-  `FSSAllBodiesFound`, with grouped stars/planets/rings, recorded exobiology,
+- Implemented roadmap 5A: persistent compact system overviews for partial and
+  complete maps, with grouped stars/planets/rings, recorded exobiology,
   and an independent initially empty curiosity registry. Added
   `/system-map/summary`, `get_current_system_summary`, and
   `get_saved_system_summary`, shared refresh/rebuild logic and fixture tests.
+  Summary schema v2 adds `all_bodies_found` and an `All bodies found` text marker
+  based only on a retained `FSSAllBodiesFound` event. Existing partial maps are
+  adopted automatically without journal replay.
 
 - Added persistent session/activity summaries via `/sessions`,
   `/sessions/current`, `/sessions/get` and three matching MCP tools, leaving

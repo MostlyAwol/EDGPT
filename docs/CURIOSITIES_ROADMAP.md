@@ -1,6 +1,7 @@
 # Curiosities roadmap
 
-Created 2026-10-08. Status: planning; no detectors implemented yet.
+Created 2026-10-08. Updated 2026-10-10: close binary pairs and close moons
+of ringed immediate parents are enabled. Remaining families are planning items.
 
 ## Purpose
 
@@ -11,8 +12,76 @@ classifications already belong in the system overview.
 
 This roadmap owns curiosity planning separately from the main EDGPT roadmap.
 The initial priorities below come from the requested exploration interests;
-later candidates are proposals, not commitments. Numerical thresholds remain
-to be selected and calibrated against examples before each rule is enabled.
+later candidates are proposals, not commitments. The requested initial proximity
+threshold is strictly less than 2000 km; broader thresholds still need calibration.
+
+## Enabled rules and tuning
+
+Change `CLOSE_DISTANCE_KM = 2000.0` near the top of `bin/curiosities.py` to
+adjust all enabled proximity checks, then restart the helper processes.
+Exactly 2000 km does not match. The threshold uses unrounded distances;
+displayed distances are rounded to three decimal places in km.
+Saved completed system summaries rerun these rules when retrieved.
+
+Geometry uses retained `Scan` fields. `Radius`, `SemiMajorAxis`, `InnerRad`
+and `OuterRad` are handled in metres, with output divided by 1000 for km.
+`Eccentricity` is dimensionless; `OrbitalPeriod` is seconds, and orbital
+inclination/periapsis are degrees. Frontier's v32 manual section 6.3 describes
+scan fields and the parent hierarchy; the manual does not explicitly
+label every distance unit. Observatory's journal field definitions provide an
+additional implementation reference (including the metre-based body radius in
+[Scan.cs](https://github.com/Xjph/ObservatoryCore/blob/master/ObservatoryFramework/Files/Journal/Exploration/Scan.cs)).
+Missing, non-finite, Boolean, string, negative or unsupported orbital values
+are skipped rather than replaced by zero. Bound orbits require `a > 0` and
+`0 <= e < 1`, giving centre-distance limits `a(1-e)` and `a(1+e)`.
+
+**Close pairs:** require exactly two known direct children of a non-root
+barycentre, both with planetary scans, valid radii/orbits and positive matching
+periods. Periods and eccentricities must agree within relative tolerance `1e-5`
+(absolute tolerance `1e-7`); inclinations within 0.01 degrees. Eccentric orbits
+also require opposing periapsides within 0.01 degrees. The common barycentre
+may be inferred or absent when both chains explicitly identify it. `Null:0`
+is a root sentinel and cannot identify a binary. Planet/moon siblings orbiting
+a normal body do not qualify.
+
+Under the two-body binary model, relative semimajor axis is `a1+a2`.
+Reported surface clearance limits are the sums of component periapsis or
+apoapsis distances minus both radii. The minimum drives the threshold;
+the maximum determines whether closeness persists throughout the orbit.
+Each pair is reported once, with both names, recorded landability and ring
+status. Negative calculated clearance is reported as a signed value.
+Scans do not verify orbital phase or full orientation: these are model-based
+estimates, not measured current separation. Multi-body and incomplete binaries
+are skipped. Size-relative selection remains deferred.
+
+**Moons of ringed parents:** require a scanned planetary immediate parent,
+at least one valid embedded ring, and a moon radius and bound orbit.
+Nested moons qualify when their immediate parent is ringed; a distant ringed
+ancestor alone cannot qualify. Parent surface clearance, when its radius is
+available, is `a(1-e)-Rmoon-Rparent` through `a(1+e)-Rmoon-Rparent`.
+Each named ring's inner and outer edges are screened separately. For edge
+radius `r`, minimum radial surface clearance is
+`max(max(periapsis-r, r-apoapsis, 0)-Rmoon, 0)`.
+The maximum radial clearance uses the larger absolute endpoint distance
+minus the moon radius, clamped to zero. Each matched edge reports its minimum
+and maximum radial clearance. Moon orbital periapsis and apoapsis are also
+included. Zero clearance is explicitly labelled as radial range overlap.
+
+Parent and edge findings are combined into one string per moon, with
+inside-innermost/between-bands/outside-outermost status when that relation
+persists for the whole moon over its orbit. Otherwise the relationship is
+labelled varying or overlapping. Asteroid belts are excluded; embedded rings
+are authoritative, standalone copies are ignored, and identical embedded
+duplicates collapse. Conflicting geometry for a duplicate name is skipped.
+Radial edge screening is not a 3D distance to ring material, evidence of a
+ring crossing, or proof of shepherding. Inclination alerts remain deferred.
+
+Validation uses synthetic positive/negative/boundary examples in
+`tests/test_curiosities.py` and a saved-map refresh test in
+`tests/test_system_summary.py`, including eccentricity, invalid/missing fields,
+root sentinels, inferred barycentres, nesting, duplicate rings, stable ordering
+and input immutability. Real-system alert-volume calibration remains open;
+2000 km is the user-selected initial default.
 
 ## 1. Shared relationship and geometry helpers
 
@@ -41,27 +110,27 @@ to be selected and calibrated against examples before each rule is enabled.
 
 ### 2.1 Close pairs
 
-- [ ] Detect unusually close binary planets and binary moons.
-- [ ] Use surface-to-surface separation, subtracting both body radii from a
+- [x] Detect unusually close binary planets and binary moons under the documented model.
+- [x] Use surface-to-surface separation, subtracting both body radii from a
   justified centre-to-centre separation; include the distance basis in output.
-- [ ] Report both body names and landability; emphasize pairs with a landable
+- [x] Report both body names and landability; identify pairs with a landable
   viewpoint and pairs where one or both bodies have rings.
 - [ ] Compare absolute clearance and separation relative to body size so large
   apparent companions can stand out too. Keep the criteria explicit.
-- [ ] Treat negative calculated clearance as a geometry/data anomaly requiring
-  investigation, not proof of a collision.
+- [x] Report negative calculated clearance as a signed value with the same
+  periapsis and apoapsis labels used for other pairs.
 
 ### 2.2 Close moons of ringed parents
 
-- [ ] Find moons close to a ringed parent's surface and separately screen for
+- [x] Find moons close to a ringed parent's surface and separately screen for
   proximity to each ring's inner or outer edge.
-- [ ] Distinguish moons inside the innermost ring, between ring bands, and
+- [x] Distinguish moons inside the innermost ring, between ring bands, and
   outside the outermost ring. These are shepherd-moon candidates, not proof
   that the moon physically confines the ring.
-- [ ] Account for moon radius and eccentricity. Report the relevant ring name
+- [x] Account for moon radius and eccentricity. Report the relevant ring name
   and whether the radial relationship persists or occurs only over part of
   the orbit.
-- [ ] Exclude asteroid belts and duplicate embedded/standalone ring records.
+- [x] Exclude asteroid belts and duplicate embedded/standalone ring records.
 
 ### 2.3 Close nested moons
 
@@ -93,8 +162,9 @@ to be selected and calibrated against examples before each rule is enabled.
   would turn ordinary giants into candidates.
 - [ ] Use known positive examples and similar negative examples to assess
   selectivity, numeric tolerance, and any game-version differences.
-- [ ] Return "possible green gas giant" with the matched evidence and criterion
-  version. A scan-based candidate needs visual confirmation; do not infer color
+- [ ] Return "possible green gas giant" with relevant scan data. Keep criterion
+  versions in developer documentation. A scan-based candidate needs visual
+  confirmation; do not infer color
   simply from life-bearing classification or a broad temperature range.
 
 ## 3. Additional candidates to consider
@@ -130,8 +200,13 @@ also require evidence beyond ordinary numeric scan fields.
 - Sort bodies/pairs consistently by stable IDs within each detector and report
   each pair once. Combine overlapping findings when they otherwise repeat the
   same information, while retaining distinct measurements.
-- Each string should name the bodies, state the curiosity, and include its
-  strongest evidence with units and any material uncertainty.
+- Each string should name the bodies, state the curiosity, and report factual
+  scan data or labelled calculated values with units. Include periapsis and
+  apoapsis where available. Do not include selection thresholds, criteria,
+  threshold-duration commentary, or explanatory disclaimers such as "not proof
+  of collision". Keep formulas, criteria, and model limitations in developer
+  documentation. Use precise labels such as "calculated", "radial", or
+  "possible green gas giant" to describe what the data represents.
 - Favor landable viewpoints, but retain exceptional non-landable relationships.
 - Existing summary retrieval already reruns detectors for saved completed maps;
   use this path so new rules can apply to old systems without raw-journal replay.

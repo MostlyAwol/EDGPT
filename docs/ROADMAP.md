@@ -334,6 +334,13 @@ history event watermark and model schema version.
 
 ## 5A. Compact system overview state
 
+**Updated behavior on 2026-10-10:** partial saved maps now produce summaries.
+Schema version 2 adds `all_bodies_found`, based only on a retained
+`FSSAllBodiesFound` event, and an `All bodies found` text marker when true.
+This supersedes the original completion gate described below. Summaries refresh
+for maps changed during ingestion and on retrieval, including partial revisits.
+See [SYSTEM_SUMMARIES.md](SYSTEM_SUMMARIES.md) for the current contract.
+
 **Status: completed on 2026-10-08.** Shared HTTP/MCP summaries are gated by
 `FSSAllBodiesFound`, persist alongside maps, and refresh curiosities on return
 visits and retrieval. The initial detector registry is empty as specified.

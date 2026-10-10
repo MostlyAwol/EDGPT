@@ -23,7 +23,8 @@ mcp = FastMCP("Elite Dangerous Full Context", stateless_http=True, json_response
 def get_current_system_summary() -> dict:
     """Read the compact current-system overview: grouped bodies/rings and recorded biology.
 
-    Available only after FSSAllBodiesFound; returns {} otherwise. Refreshes and
+    Includes partial scans; all_bodies_found marks retained FSSAllBodiesFound.
+    Returns {} if no map exists. Refreshes and
     saves derived curiosities from the merged map. Use full map tools for detail.
     """
     return get_system_summary() or {}
@@ -31,8 +32,8 @@ def get_current_system_summary() -> dict:
 
 @mcp.tool()
 def get_saved_system_summary(system: str) -> dict:
-    """Read a completed system overview by name or SystemAddress, refreshing saved
-    derived curiosities. Returns {} if unknown or not confirmed by FSSAllBodiesFound.
+    """Read a partial or complete system overview by name or SystemAddress, refreshing
+    derived curiosities. Returns {} if unknown; all_bodies_found marks recorded FSS completion.
     """
     return get_system_summary(system) or {}
 

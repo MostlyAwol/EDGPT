@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import curiosities
 
-SUMMARY_SCHEMA_VERSION = 1
+SUMMARY_SCHEMA_VERSION = 2
 
 
 def _text(value):
@@ -17,9 +17,7 @@ def _groups(values):
 
 
 def build_system_summary(system_map):
-    """Return unavailable until the map retains an FSSAllBodiesFound event."""
-    if "FSSAllBodiesFound" not in system_map.get("system_events", {}):
-        return None
+    """Summarize available map data, marking recorded FSS completion separately."""
     stars, planets, rings = [], [], {}
     known = 0
     bio_signals, bio_bodies, genera, species = 0, set(), set(), set()
@@ -79,6 +77,7 @@ def build_system_summary(system_map):
         "schema_version": SUMMARY_SCHEMA_VERSION,
         "system_address": system_map["system_address"],
         "system_name": system_map["system_name"],
+        "all_bodies_found": "FSSAllBodiesFound" in system_map.get("system_events", {}),
         "bodies_known": known,
         "expected_body_count": expected,
         "stars": _groups(stars), "planets": _groups(planets),
@@ -97,6 +96,8 @@ def build_system_summary(system_map):
 
 def render_system_summary(summary):
     lines = [f"# {_text(summary['system_name'])}"]
+    if summary["all_bodies_found"]:
+        lines.extend(["", "All bodies found"])
     if summary["expected_body_count"] is not None:
         lines.extend(["", f"{summary['bodies_known']} of {summary['expected_body_count']} bodies known"])
     for key, title in (("stars", "Stars"), ("planets", "Planets"), ("rings", "Rings")):

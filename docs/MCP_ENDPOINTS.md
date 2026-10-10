@@ -108,8 +108,9 @@ return JSON objects containing metadata and rendered text.
 
 Compact overviews are available through `get_current_system_summary()` and
 `get_saved_system_summary(system: str)` (name or SystemAddress). They return
-the same structured overview as HTTP, including `summary_text`, or `{}` until
-`FSSAllBodiesFound` is recorded. Reads refresh and persist derived curiosities.
+the same structured overview as HTTP, including `summary_text` for partial maps,
+or `{}` if unknown. `all_bodies_found` marks a retained `FSSAllBodiesFound` event.
+Reads refresh and persist derived curiosities.
 See [SYSTEM_SUMMARIES.md](SYSTEM_SUMMARIES.md).
 
 | Tool | Arguments | Return value |

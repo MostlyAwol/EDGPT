@@ -43,7 +43,7 @@ def integrations():
 def capabilities():
     return {**version(), "http_endpoints": ENDPOINTS, "mcp_tools": TOOLS,
             "state_models": ["current_state", "journal_history", "system_maps", "sessions", "system_summaries"],
-            "system_summary_schema_version": 1,
+            "system_summary_schema_version": 2,
             "session_schema_version": 1,
             "limits": {"events": 5000, "saved_system_maps": 1000, "sessions": 100, "session_activity_examples": 20},
             "response_profiles": {"state": ["compact", "history_summary", "recent_events", "loadout", "live_files"],

@@ -35,11 +35,16 @@ def model_from(events):
 
 
 class SummaryRenderingTests(unittest.TestCase):
-    def test_gate_and_grouping(self):
-        self.assertIsNone(build_system_summary(model_from(EVENTS[:-1])))
+    def test_completion_and_grouping(self):
+        partial = build_system_summary(model_from(EVENTS[:-1]))
+        self.assertFalse(partial["all_bodies_found"])
+        self.assertNotIn("All bodies found", partial["summary_text"])
+        self.assertEqual(partial["bodies_known"], 3)
         model = model_from(EVENTS)
         original = deepcopy(model)
         summary = build_system_summary(model)
+        self.assertTrue(summary["all_bodies_found"])
+        self.assertIn("All bodies found", summary["summary_text"])
         self.assertEqual(model, original)
         self.assertEqual(summary["stars"], [{"type": "K star", "count": 1}])
         self.assertEqual(summary["planets"], [{"type": "Rocky body", "count": 2}])
@@ -94,7 +99,7 @@ class SummaryRenderingTests(unittest.TestCase):
 
 
 class CuriosityTests(unittest.TestCase):
-    def test_initial_dispatcher_and_rule_order(self):
+    def test_ordinary_system_and_rule_order(self):
         model = model_from(EVENTS)
         original = deepcopy(model)
         self.assertEqual(curiosities.find_curiosities(model), [])
@@ -126,12 +131,14 @@ class SummaryPersistenceTests(unittest.TestCase):
             row = conn.execute("SELECT summary_json FROM system_summaries WHERE system_address=123").fetchone()
             return json.loads(row[0]) if row else None
 
-    def test_gating_ingestion_restart_and_schema_rebuild(self):
-        self.assertIsNone(maps.get_system_summary())
-        self.assertIsNone(self.persisted())
+    def test_partial_ingestion_restart_and_schema_rebuild(self):
+        partial = maps.get_system_summary()
+        self.assertFalse(partial["all_bodies_found"])
+        self.assertEqual(partial, self.persisted())
         self.write([EVENTS[-1]], append=True)
         maps.sync_system_maps()
         saved = self.persisted()
+        self.assertTrue(saved["all_bodies_found"])
         self.assertIn("3 of 3", saved["summary_text"])
         code = "import system_map_store as m; print(m.get_system_summary(123)['summary_text'])"
         env = dict(os.environ, PYTHONPATH=str(BIN), ELITE_JOURNAL_DIR=str(self.journals),
@@ -174,6 +181,40 @@ class SummaryPersistenceTests(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertEqual(summary["stars"][0]["type"], "K star")
 
+    def test_partial_revisit_and_recorded_completion(self):
+        self.write(EVENTS[:3])
+        maps.sync_system_maps()
+        self.assertFalse(self.persisted()["all_bodies_found"])
+        self.assertEqual(self.persisted()["bodies_known"], 2)
+        self.write([EVENTS[0], EVENTS[3]], append=True)
+        maps.sync_system_maps()
+        partial = maps.get_system_summary(123)
+        self.assertFalse(partial["all_bodies_found"])
+        self.assertEqual(partial["bodies_known"], 3)
+        self.write([EVENTS[-1], EVENTS[0]], append=True)
+        maps.sync_system_maps()
+        self.assertTrue(maps.get_system_summary(123)["all_bodies_found"])
+
+    def test_saved_completed_map_runs_new_detectors_without_replay(self):
+        scans = [{"event": "Scan", "SystemAddress": 123, "BodyID": body_id, "BodyName": f"Overview {body_id}",
+                  "PlanetClass": "Rocky body", "Parents": [{"Null": 10}],
+                  "Radius": 500000, "SemiMajorAxis": 1000000, "Eccentricity": 0,
+                  "OrbitalPeriod": 1000, "OrbitalInclination": 0, "Landable": True}
+                 for body_id in (1, 2)]
+        self.write(scans + [EVENTS[-1]], append=True)
+        with patch.object(curiosities, "CURIOSITY_RULES", ()):
+            maps.sync_system_maps()
+            self.assertEqual(self.persisted()["curiosities"], [])
+        with maps._connect() as conn:
+            original = conn.execute("SELECT map_json FROM system_maps WHERE system_address=123").fetchone()[0]
+        with patch.object(maps, "sync_system_maps"):
+            summary = maps.get_system_summary(123)
+        self.assertIn("Close binary pair", summary["curiosities"][0])
+        self.assertIn("1,000.000 km", summary["summary_text"])
+        self.assertEqual(summary, self.persisted())
+        with maps._connect() as conn:
+            self.assertEqual(original, conn.execute("SELECT map_json FROM system_maps WHERE system_address=123").fetchone()[0])
+
     def test_current_location_does_not_return_previous_system(self):
         self.write([EVENTS[-1], {"event": "Location", "SystemAddress": 999, "StarSystem": "Unknown"}], append=True)
         self.assertIsNone(maps.get_system_summary())
@@ -190,10 +231,18 @@ class SummaryPersistenceTests(unittest.TestCase):
         maps.sync_system_maps()
         self.assertIsNotNone(self.persisted())
         self.write(EVENTS[:2])
-        self.assertIsNone(maps.get_system_summary(123))
-        self.assertIsNone(self.persisted())
+        partial = maps.get_system_summary(123)
+        self.assertFalse(partial["all_bodies_found"])
+        self.assertEqual(partial["bodies_known"], 1)
+        self.assertEqual(partial, self.persisted())
 
     def test_http_and_registered_mcp_equivalence(self):
+        named_events = deepcopy(EVENTS)
+        for event in named_events:
+            for field in ("StarSystem", "SystemName"):
+                if event.get(field) == "Overview":
+                    event[field] = "Overview Test"
+        self.write(named_events[:-1])
         http = HTTPServer(("127.0.0.1", 0), server.Handler)
         thread = threading.Thread(target=http.serve_forever, daemon=True)
         thread.start()
@@ -204,10 +253,21 @@ class SummaryPersistenceTests(unittest.TestCase):
         def read(suffix=""):
             with urllib.request.urlopen(base + suffix, timeout=10) as response:
                 return json.load(response)
-        self.assertEqual(read(), {})
-        self.write([EVENTS[-1]], append=True)
+        partial = read()
+        self.assertFalse(partial["all_bodies_found"])
+        self.assertEqual(read("?system=overview+test"), partial)
+        async def check_partial():
+            content = await mcp_server.mcp.call_tool("get_saved_system_summary", {"system": "overview test"})
+            self.assertEqual(json.loads(content[0].text), partial)
+        asyncio.run(check_partial())
+        self.write([named_events[-1]], append=True)
         expected = read()
-        self.assertEqual(read("?system=Overview"), expected)
+        self.assertTrue(expected["all_bodies_found"])
+        self.assertEqual(expected["system_name"], "Overview Test")
+        self.assertEqual(read("?system=123"), expected)
+        self.assertEqual(read("?system=Overview%20Test"), expected)
+        self.assertEqual(read("?system=overview+test"), expected)
+        self.assertEqual(read("?system=Overview"), {})
         self.assertEqual(read("?system=999"), {})
         for suffix in ("?system=", "?system=123&system=123", "?unknown=1"):
             with self.assertRaises(urllib.error.HTTPError) as error:
@@ -216,7 +276,8 @@ class SummaryPersistenceTests(unittest.TestCase):
             error.exception.close()
         async def check():
             for tool, args in (("get_current_system_summary", {}),
-                               ("get_saved_system_summary", {"system": "123"})):
+                               ("get_saved_system_summary", {"system": "123"}),
+                               ("get_saved_system_summary", {"system": "overview test"})):
                 content = await mcp_server.mcp.call_tool(tool, args)
                 self.assertEqual(json.loads(content[0].text), expected)
         asyncio.run(check())

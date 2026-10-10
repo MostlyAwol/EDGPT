@@ -155,7 +155,6 @@ def sync_system_maps(*, sync_history=True):
                 break
 
             models = {}
-            refresh = set()
             for item in batch:
                 event = item["data"]
                 try:
@@ -167,8 +166,6 @@ def sync_system_maps(*, sync_history=True):
                     name = event.get("SystemName") or event.get("StarSystem") or ""
                     models[address] = _load_model(conn, address, name)
                 apply_event(models[address], event, item["id"])
-                if event.get("event") in ("FSSAllBodiesFound", "FSDJump"):
-                    refresh.add(address)
                 if event.get("event") == "FSDJump":
                     _set_meta(conn, "current_system_address", address)
                 cursor = max(cursor, int(item["id"]))
@@ -176,8 +173,7 @@ def sync_system_maps(*, sync_history=True):
 
             for model in models.values():
                 _save_model(conn, model)
-                if model["system_address"] in refresh:
-                    _save_summary(conn, model)
+                _save_summary(conn, model)
             _set_meta(conn, "history_event_id", cursor)
 
         _set_meta(conn, "history_generation", generation)
@@ -186,8 +182,8 @@ def sync_system_maps(*, sync_history=True):
         # Adopt this feature on existing map databases without journal replay.
         rows = conn.execute(
             "SELECT m.map_json FROM system_maps m LEFT JOIN system_summaries s "
-            "ON m.system_address=s.system_address WHERE m.known_complete=1 "
-            "AND (s.system_address IS NULL OR s.schema_version!=?)",
+            "ON m.system_address=s.system_address "
+            "WHERE s.system_address IS NULL OR s.schema_version!=?",
             (SUMMARY_SCHEMA_VERSION,),
         ).fetchall()
         for row in rows:
@@ -209,7 +205,7 @@ def _save_summary(conn, model):
 
 
 def get_system_summary(identifier=None):
-    """Refresh and persist a completed current/saved overview from the full map."""
+    """Refresh and persist a current/saved overview from available map data."""
     sync_system_maps()
     if identifier is None:
         locations = latest_state_events(("Location", "FSDJump", "CarrierJump"), sync=False)
