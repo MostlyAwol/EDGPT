@@ -420,7 +420,8 @@ def close_stellar_relationships(system_map):
         kind, parent_id = _parent(body)
         parent = nodes.get(parent_id)
         scan = _scan(body)
-        if kind not in (None, "Star") or parent is None or not scan.get("PlanetClass"):
+        if (kind not in (None, "Star") or parent is None
+                or not scan.get("PlanetClass") or scan.get("Landable") is not True):
             continue
         parent_scan = _scan(parent)
         stellar_radius = _radius(parent_scan)

@@ -34,7 +34,7 @@ The additional selection defaults are named constants in `curiosities.py`:
 | `POLAR_TOLERANCE_DEG` | 15 | Maximum departure from 90 degrees for near-polar label |
 | `SHORT_ORBIT_HOURS` | 1 | Maximum positive orbital period |
 | `HIGH_ECCENTRICITY` | 0.9 | Minimum eccentricity in a valid bound orbit |
-| `CLOSE_STAR_RADII` | 5 | Maximum planetary periapsis / stellar radius |
+| `CLOSE_STAR_RADII` | 5 | Maximum landable planetary periapsis / stellar radius |
 | `WIDE_RING_KM` | 1000000 | Minimum nearby ring width for large-ring detail |
 | `LARGE_RING_PARENT_RADII` | 100 | Alternative minimum outer ring radius / parent radius |
 | `SMALL_LANDABLE_RADIUS_KM` | 300 | Maximum small landable radius |
