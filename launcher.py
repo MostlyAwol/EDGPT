@@ -371,7 +371,6 @@ def stop_all():
 
 
 _diagnostic_running = False
-_last_diagnostic_error = ""
 
 
 def run_diagnostics(report=True):
@@ -400,17 +399,15 @@ def run_diagnostics(report=True):
         root.after(0, display, result)
 
     def display(result):
-        global _diagnostic_running, _last_diagnostic_error
+        global _diagnostic_running
         _diagnostic_running = False
         parts = result["components"]
         state_var.set(result["status"].upper())
         for name, variable in (("mcp", mcp_var), ("github", github_var), ("tunnel", openai_var)):
             variable.set(parts.get(name, {"status": "unknown"})["status"].upper())
         errors = [name + ": " + value["last_error"] for name, value in parts.items()
-                  if value.get("last_error") and value["status"] not in ("ready", "disabled")]
-        if errors:
-            _last_diagnostic_error = " | ".join(errors)
-        diagnostic_var.set("Last issue: " + _last_diagnostic_error if _last_diagnostic_error else "No diagnostic errors reported.")
+                  if value.get("last_error") and value["status"] in ("error", "degraded")]
+        diagnostic_var.set("Current issue: " + " | ".join(errors) if errors else "No current diagnostic errors.")
         if report:
             log("EDGPT CHECK: " + result["status"].upper())
             for name, value in parts.items():

@@ -1,4 +1,6 @@
+import ast
 import json
+import logging
 from contextlib import closing
 import os
 import sqlite3
@@ -7,7 +9,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bin"))
 import diagnostics as d
@@ -70,6 +72,36 @@ class HealthTests(unittest.TestCase):
         d._observations.clear()
         self.assertEqual(d.health()["status"], "ready")
 
+    def test_checked_unterminated_line_is_not_perpetually_indexing(self):
+        for tail in (json.dumps({"event": "Scan", "SystemAddress": 123}),
+                     '{"event":"Scan","SystemAddress":'):
+            with self.subTest(tail=tail):
+                self.journal.write_text(self.journal.read_text().splitlines()[0] + "\n" + tail)
+                self.assertEqual(d.health()["components"]["history"]["status"], "indexing")
+                h.sync_journals()
+                m.sync_system_maps()
+                result = d.health()
+                self.assertEqual(result["status"], "ready")
+                self.assertEqual(result["components"]["history"]["event_count"], 1)
+                with self.journal.open("a") as journal:
+                    journal.write("123}\n" if tail.endswith(":") else "\n")
+                self.assertEqual(d.health()["components"]["history"]["status"], "indexing")
+                h.sync_journals()
+                m.sync_system_maps()
+                result = d.health()
+                self.assertEqual(result["status"], "ready")
+                self.assertEqual(result["components"]["history"]["event_count"], 2)
+
+    def test_same_size_journal_edit_is_pending(self):
+        original = self.journal.stat()
+        self.journal.write_text(self.journal.read_text().replace("Private System", "Changed System"))
+        os.utime(self.journal, (original.st_atime, original.st_mtime + 2))
+        self.assertEqual(self.journal.stat().st_size, original.st_size)
+        self.assertEqual(d.health()["components"]["history"]["status"], "indexing")
+        h.sync_journals()
+        m.sync_system_maps()
+        self.assertEqual(d.health()["status"], "ready")
+
     def test_optional_failure_and_recovery(self):
         self.config.write_text(json.dumps({"github": {"enabled": True}}))
         d.heartbeat("github", "degraded", "GitHub request failed; check settings.")
@@ -91,6 +123,60 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(d.health()["status"], "indexing")
         d.heartbeat("indexer", "error", "Index update failed.")
         self.assertEqual(d.health()["status"], "error")
+
+    def test_index_failure_identifies_stage_and_recovers(self):
+        with patch.object(m, "sync_system_maps", side_effect=ValueError("Private System")):
+            message = d._index_once()
+        self.assertIn("System-map index update failed", message)
+        self.assertNotIn("Private System", message)
+        self.assertEqual(d.health()["status"], "error")
+        self.assertIsNone(d._index_once())
+        self.assertEqual(d.health()["status"], "ready")
+        self.assertEqual(d.health()["components"]["history"]["last_error"], message)
+
+    def test_locked_index_failure_is_not_reported_as_permissions(self):
+        error = sqlite3.OperationalError("secret path")
+        error.sqlite_errorcode = sqlite3.SQLITE_BUSY
+        with patch.object(h, "sync_journals", side_effect=error):
+            message = d._index_once()
+        self.assertIn("History index update failed", message)
+        self.assertIn("busy or locked", message)
+        self.assertNotIn("permissions", message)
+        self.assertNotIn("secret path", message)
+
+    def test_index_failure_with_unwritable_report(self):
+        with patch.object(d, "heartbeat", side_effect=PermissionError("secret path")):
+            message = d._index_once()
+        self.assertIn("Diagnostic report could not be written", message)
+        self.assertNotIn("secret path", message)
+
+    def test_launcher_clears_recovered_issue_even_when_history_is_stale(self):
+        # Load only the callback, avoiding Tk startup, config writes and children.
+        path = Path(__file__).resolve().parents[1] / "launcher.py"
+        module = ast.parse(path.read_text(encoding="utf-8"))
+        run = next(node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == "run_diagnostics")
+        display = next(node for node in run.body if isinstance(node, ast.FunctionDef) and node.name == "display")
+        namespace = {name: Mock() for name in ("state_var", "mcp_var", "github_var", "openai_var", "diagnostic_var")}
+        namespace["report"] = False
+        exec(compile(ast.Module(body=[display], type_ignores=[]), str(path), "exec"), namespace)
+        namespace["display"]({"status": "error", "components": {"history": {
+            "status": "error", "last_error": "Index update failed."}}})
+        self.assertIn("Index update failed.", namespace["diagnostic_var"].set.call_args.args[0])
+        namespace["display"]({"status": "stale", "components": {"history": {
+            "status": "stale", "last_error": "Index update failed."}}})
+        self.assertEqual(namespace["diagnostic_var"].set.call_args.args[0], "No current diagnostic errors.")
+
+    def test_mcp_access_log_keeps_failed_requests(self):
+        from mcp_server import _SuccessfulMCPRequests
+        access_filter = _SuccessfulMCPRequests()
+        for method, path, status, expected in (("POST", "/mcp", 200, False),
+                                               ("POST", "/mcp", 202, False),
+                                               ("POST", "/mcp", 400, True),
+                                               ("GET", "/mcp", 200, True),
+                                               ("POST", "/other", 200, True)):
+            record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, "%s %s %s %s %s",
+                                       ("127.0.0.1:24015", method, path, "1.1", status), None)
+            self.assertEqual(access_filter.filter(record), expected)
 
     def test_capabilities_match_transports(self):
         import asyncio

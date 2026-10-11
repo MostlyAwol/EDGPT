@@ -7,8 +7,11 @@ Health always returns HTTP 200 when the diagnostic handler can respond; inspect
 
 Overall precedence is `error`, `degraded`, `indexing`, `stale`, then `ready`.
 Core failures are `error` (broken); optional integration failures are `degraded`.
-`indexing` means ingestion/backfill is active or persisted cursors lag source
-files/history. `stale` means there are no dated events or the latest indexed
+`indexing` means ingestion/backfill is active, journal sizes/modification times
+have changed since the last indexing pass, or map cursors lag history. A checked
+journal's trailing line awaiting a newline does not keep the status indexing;
+the indexer imports that line once the newline arrives.
+`stale` means there are no dated events or the latest indexed
 event is older than 3,600 seconds. This can be normal when the game is closed.
 Disabled integrations do not affect readiness.
 
@@ -33,7 +36,14 @@ CLI does not expose a stable configured readiness endpoint. It is never reported
 ready solely because its child process exists.
 
 The launcher polls this contract every ten seconds in a background thread;
-CHECK logs component results and the UI retains the last actionable issue.
+CHECK logs component results. The UI shows current errors/degraded components
+and clears the issue after recovery; retained `last_error` values remain in
+health reports for diagnosis, including while journals are stale or indexing.
+Indexer failures identify the history or system-map step and a safe error
+category. The log reports a changed failure once and reports recovery.
+Successful MCP POST access logs are suppressed; failed requests remain visible.
+The launcher health poll itself sends a local MCP initialization request every
+ten seconds, even when no AI client is connected.
 The local dashboard displays current state only; health is available at `/health`.
 Private journal paths, commander
 names, raw events, tokens, repository names and exception text are excluded.

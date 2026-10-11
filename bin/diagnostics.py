@@ -126,8 +126,16 @@ def health(origin="state_server"):
     try:
         with closing(sqlite3.connect(history.DB_PATH.resolve().as_uri() + "?mode=ro", uri=True, timeout=0.2)) as db:
             count, high, latest = db.execute("SELECT COUNT(*), COALESCE(MAX(id),0), MAX(timestamp) FROM events").fetchone()
-            offsets = dict(db.execute("SELECT journal_file, offset FROM journal_state"))
-        pending = any(p.stat().st_size != offsets.get(p.name, -1) for p in journals)
+            journal_states = {row[0]: (row[1], row[2]) for row in db.execute(
+                "SELECT journal_file, size, mtime FROM journal_state")}
+        # A checked file may end with a line awaiting its newline. Compare the
+        # observed file state, not the offset of the last complete line.
+        pending = False
+        for path in journals:
+            stat = path.stat()
+            if journal_states.get(path.name) != (stat.st_size, stat.st_mtime):
+                pending = True
+                break
         age = None
         if latest:
             try:
@@ -187,19 +195,54 @@ def health(origin="state_server"):
             "checked_at": now, "stale_after_seconds": STALE_SECONDS, "components": components}
 
 
+def _index_failure(stage, error):
+    """Explain failures without exposing exception text, paths or journal data."""
+    code = getattr(error, "sqlite_errorcode", 0) & 0xff
+    if isinstance(error, sqlite3.OperationalError) and code in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+        detail = "Database is busy or locked; close duplicate EDGPT instances. The indexer will retry."
+    elif isinstance(error, PermissionError) or code in (sqlite3.SQLITE_READONLY, sqlite3.SQLITE_CANTOPEN, sqlite3.SQLITE_FULL, sqlite3.SQLITE_IOERR):
+        detail = "Database or files could not be accessed; check data directory permissions and free disk space."
+    elif isinstance(error, sqlite3.OperationalError):
+        detail = "Database operation failed; check database integrity and the EDGPT version."
+    elif isinstance(error, sqlite3.DatabaseError):
+        detail = "Database could not be read; check database integrity before rebuilding from journals."
+    elif isinstance(error, (ValueError, TypeError, OverflowError)):
+        detail = "An indexed value could not be processed; check journal data and the EDGPT version."
+    else:
+        detail = "Unexpected indexing failure; check the EDGPT version. The indexer will retry."
+    return stage + " index update failed. " + detail
+
+
+def _index_once():
+    from history_store import sync_journals
+    from system_map_store import sync_system_maps
+    stage = "History"
+    try:
+        heartbeat("indexer", "indexing")
+        sync_journals()
+        stage = "System-map"
+        sync_system_maps(sync_history=False)
+        heartbeat("indexer", "ready")
+    except Exception as error:
+        message = _index_failure(stage, error)
+        try:
+            heartbeat("indexer", "error", message)
+        except OSError:
+            message += " Diagnostic report could not be written; check data directory permissions."
+        return message
+    return None
+
+
 def start_indexer():
-    heartbeat("indexer", "indexing")
 
     def run():
-        from history_store import sync_journals
-        from system_map_store import sync_system_maps
+        previous_error = None
         while True:
-            try:
-                heartbeat("indexer", "indexing")
-                sync_journals()
-                sync_system_maps()
-                heartbeat("indexer", "ready")
-            except Exception:
-                heartbeat("indexer", "error", "Index update failed; check data directory permissions and restart.")
+            error = _index_once()
+            if error and error != previous_error:
+                print("[INDEXER] " + error, flush=True)
+            elif previous_error and not error:
+                print("[INDEXER] Index update recovered.", flush=True)
+            previous_error = error
             time.sleep(5)
     threading.Thread(target=run, daemon=True).start()

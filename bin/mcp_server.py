@@ -1,4 +1,5 @@
 from diagnostics import health, capabilities
+import logging
 import os
 from pathlib import Path
 
@@ -186,5 +187,15 @@ def get_saved_system_map_full(system: str) -> str:
     return result["full_text"] if result else f"No saved system map found for: {system}"
 
 
+class _SuccessfulMCPRequests(logging.Filter):
+    def filter(self, record):
+        # Uvicorn access records contain client, method, path, HTTP version, status.
+        args = record.args
+        return not (isinstance(args, tuple) and len(args) == 5
+                    and args[1] == "POST" and args[2] == "/mcp"
+                    and args[4] in (200, 202, 204))
+
+
 if __name__ == "__main__":
+    logging.getLogger("uvicorn.access").addFilter(_SuccessfulMCPRequests())
     mcp.run(transport="streamable-http")
