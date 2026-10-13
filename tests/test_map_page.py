@@ -1,4 +1,5 @@
 import sys
+import re
 import threading
 import unittest
 from http.server import HTTPServer
@@ -6,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.request import urlopen
 from urllib.error import HTTPError
+from html.parser import HTMLParser
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bin"))
 import server
@@ -73,6 +75,71 @@ class MapPageTests(unittest.TestCase):
             code, _, body = self.get("/map")
         self.assertEqual(code, 200)
         self.assertIn("Waiting for journal data", body)
+
+    def test_export_is_offline_fragment_with_scoped_css_and_retained_details(self):
+        model = new_system_map(123, "Snapshot <img src=x>")
+        apply_event(model, {"event": "Scan", "BodyID": 0, "BodyName": "Primary",
+                           "StarType": "K", "StellarMass": 0.8})
+        with patch.object(server, "current_page_map", return_value=_result(model, include_model=True)):
+            code, headers, body = self.get("/map/export")
+        self.assertEqual(code, 200)
+        self.assertEqual(headers["Content-Disposition"], 'attachment; filename="elite-map-123.html"')
+        self.assertEqual(int(headers["Content-Length"]), len(body.encode("utf-8")))
+        self.assertIn("Snapshot &lt;img src=x&gt;", body)
+        self.assertIn("Saved snapshot", body)
+        self.assertIn("Primary", body)
+        self.assertIn("Stellar Mass", body)
+        self.assertIn("<details", body)
+        self.assertNotIn("setTimeout", body)
+        self.assertNotIn("fetch(", body)
+        self.assertNotIn("<!doctype", body)
+
+        tags = []
+        class Tags(HTMLParser):
+            def handle_starttag(self, tag, attrs):
+                tags.append((tag, dict(attrs)))
+        Tags().feed(body)
+        for tag, attrs in tags:
+            self.assertNotIn(tag, ("html", "head", "body", "script", "nav", "form", "input", "button", "a"))
+            self.assertNotIn("src", attrs)
+            self.assertNotIn("href", attrs)
+            self.assertFalse(any(key.startswith("on") for key in attrs))
+        css = body.split("<style>", 1)[1].split("</style>", 1)[0]
+        for selectors in re.findall(r"([^{}]+)\{", css):
+            if selectors.strip().startswith("@media"):
+                continue
+            for selector in selectors.split(","):
+                self.assertRegex(selector.strip(), r"^\.ed-system-map(?:\s|$)")
+                self.assertNotRegex(selector, r"\b(?:body|html)\b(?!-)")
+
+    def test_export_saved_system_and_live_download_link(self):
+        result = {"system_name": "Saved", "system_address": 12345678901234567,
+                  "simple_text": "Planet <img src=x>"}
+        with patch.object(server, "get_system_map", return_value=result) as lookup:
+            code, _, body = self.get("/map/export?system=12345678901234567")
+        lookup.assert_called_once_with("12345678901234567", include_model=True)
+        self.assertEqual(code, 200)
+        self.assertIn("Planet &lt;img src=x&gt;", body)
+        with patch.object(server, "current_page_map", return_value=result):
+            _, _, body = self.get("/map")
+        self.assertIn('href="/map/export?system=12345678901234567" download', body)
+        self.assertIn("Export WordPress HTML", body)
+
+    def test_export_empty_missing_and_invalid(self):
+        with patch.object(server, "current_page_map", return_value=None):
+            code, headers, body = self.get("/map/export")
+        self.assertEqual(code, 200)
+        self.assertIn("Waiting for journal data", body)
+        self.assertIn("elite-map-current.html", headers["Content-Disposition"])
+        with patch.object(server, "get_system_map", return_value=None):
+            code, headers, body = self.get("/map/export?system=123")
+        self.assertEqual(code, 404)
+        self.assertNotIn("Content-Disposition", headers)
+        self.assertIn("No saved map", body)
+        for query in ("system=", "system=no", "system=-1", "system=1&system=2", "other=1"):
+            code, headers, _ = self.get("/map/export?" + query)
+            self.assertEqual(code, 400, query)
+            self.assertNotIn("Content-Disposition", headers)
 
     def test_current_follows_latest_location_and_carrier_jump(self):
         for kind in ("Location", "CarrierJump"):

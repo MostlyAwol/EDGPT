@@ -92,7 +92,8 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
         qs = parse_qs(parsed.query, keep_blank_values=True)
 
-        if path == "/map":
+        if path in ("/map", "/map/export"):
+            exporting = path == "/map/export"
             system = qs.get("system", [None])[0]
             code, message, result = 200, None, None
             if (any(key != "system" or len(values) != 1 for key, values in qs.items())
@@ -103,11 +104,18 @@ class Handler(BaseHTTPRequestHandler):
                 result = current_page_map() if system is None else get_system_map(system, include_model=True)
                 if result is None and system is not None:
                     code, message = 404, "No saved map for this system ID. Only systems recorded in your journals are available."
-            body = render_map_page(result, system=system, message=message).encode("utf-8")
+            body = render_map_page(result, system=system, message=message,
+                                   export=exporting and code == 200).encode("utf-8")
             self.send_response(code)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
+            if exporting and code == 200:
+                address = (result or {}).get("system_address")
+                identifier = str(address if address is not None else system or "current")
+                if not identifier.isascii() or not identifier.isdecimal():
+                    identifier = "current"
+                self.send_header("Content-Disposition", f'attachment; filename="elite-map-{identifier}.html"')
             self.end_headers()
             self.wfile.write(body)
             return

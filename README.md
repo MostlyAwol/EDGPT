@@ -49,6 +49,16 @@ and nested scan data. System signals and complete system records appear below
 the hierarchy. Expanded sections stay open during live refreshes of the same
 system; **Expand all details** opens everything at once.
 
+Click **Export WordPress HTML** to download a snapshot of the displayed system.
+Open the downloaded `.html` file in a text editor and paste its contents into a
+WordPress **Custom HTML** block. The export includes the map data and styles,
+with no auto refresh, search, scripts, or server links. Expandable details work
+without JavaScript. All CSS is scoped to the map container, including mobile
+and print styles, so it does not restyle the surrounding website. WordPress must
+allow the included `<style>` element for the map styling to appear.
+You can also download directly from `/map/export` or
+`/map/export?system=123456789`.
+
 Organic scans add an **Organic confirmed seen** badge and the organism's name;
 completed analysis is marked separately. All Log, Sample, and Analyse journal
 records remain available under **Scan Organic**. Existing indexed scans are
