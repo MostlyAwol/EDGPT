@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Flag shepherd-moon candidates between a parent and its innermost ring or
+  between ring bands, even without close proximity. Require the whole moon to
+  remain within the gap throughout its orbit and combine close-moon details.
+
+- Display stellar binary surface clearance in multiples of the larger star's
+  radius, naming the reference star and appending the closest clearance in km.
+  Stellar binary selection is unchanged.
+
+- Reduced curiosity noise: axial tilt alone no longer triggers an alert, and
+  standalone ring findings require a landable body. Close ringed-parent moons,
+  inclined orbits and ringed binaries retain their relationship findings.
+
 - Completed the initial curiosity detector families and additional exploration
   categories: body-relative close binaries, nested moons and ringed ancestors,
   inclined/polar moons, nearby stellar relationships, selective possible green

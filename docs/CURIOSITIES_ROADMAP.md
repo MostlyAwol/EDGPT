@@ -4,6 +4,11 @@ Created 2026-10-08. Updated 2026-10-10: all five initial detector families and
 the additional candidate categories below are implemented. Phase-dependent
 geometry and broader green gas giant prediction remain research topics.
 
+Updated 2026-10-18: axial tilt no longer selects a body by itself, and standalone
+ring findings require explicit landability. Non-landable ringed terrestrial
+worlds still qualify through notable relationships such as close moons or binaries.
+Shepherd-moon candidates now also qualify from stable ring-gap geometry alone.
+
 ## Purpose
 
 Develop `bin/curiosities.py` into a detector for unusual Elite Dangerous
@@ -44,7 +49,6 @@ The additional selection defaults are named constants in `curiosities.py`:
 | `HOT_LANDABLE_K` | 1500 | Minimum hot landable temperature |
 | `FAST_ROTATION_HOURS` | 1 | Maximum nonzero absolute rotation period |
 | `SLOW_SPIN_ORBIT_RATIO` | 10 | Minimum absolute rotation / positive orbital period |
-| `INVERTED_SPIN_DEG` | 175 | Minimum absolute axial tilt for standalone retrograde spin alert |
 
 These are local exploration defaults, not claims of galaxy-wide rarity. Selection
 uses original values. Body-property findings combine into one entry per body;
@@ -84,6 +88,23 @@ Scans do not verify orbital phase or full orientation: these are model-based
 estimates, not measured current separation. Multi-body and incomplete binaries
 are skipped. Stellar binary detection uses the same compatibility checks and
 clearance calculations, but requires both components to have stellar scans.
+Stellar binary clearance is displayed in multiples of the larger component's
+radius, with that star named as the reference. This is the actual star's radius,
+not the Sun's radius. The closest surface-to-surface clearance in km is appended
+at the end. Selection still uses the combined radii; display normalization does
+not change which pairs qualify. If a normalized value overflows, the clearance
+range remains in km.
+
+**Shepherd-moon candidates:** select moons whose entire radial surface range
+stays strictly between the parent surface and innermost ring, or strictly within
+a gap between ring bands, throughout the bound orbit. These qualify independently
+of `CLOSE_DISTANCE_KM` and landability. The inner gap requires a valid parent
+radius; gaps between bands require only valid ring geometry, moon radius and
+orbit. Touching/crossing boundaries and moons outside all rings do not qualify
+by this rule. Overlapping ring bands are treated as occupied together.
+Descriptions name both gap boundaries and give minimum/maximum calculated radial
+surface clearances. Findings combine with existing close-moon details into one
+entry. This is geometric candidate screening, not evidence of physical shepherding.
 
 **Moons of ringed parents:** require a scanned planetary immediate parent,
 at least one valid embedded ring, and a moon radius and bound orbit.
@@ -200,8 +221,11 @@ committed. Ongoing broader calibration remains useful.
 - [x] Find moons close to a ringed parent's surface and separately screen for
   proximity to each ring's inner or outer edge.
 - [x] Distinguish moons inside the innermost ring, between ring bands, and
-  outside the outermost ring. These are shepherd-moon candidates, not proof
-  that the moon physically confines the ring.
+  outside the outermost ring. Stable inner-gap and inter-ring moons are
+  shepherd-moon candidates, not proof that the moon physically confines the ring.
+- [x] Select stable inner-gap and inter-ring shepherd-moon candidates even when
+  no parent or ring edge passes the proximity threshold; exclude outside-only
+  moons from shepherd selection and combine overlapping relationship findings.
 - [x] Account for moon radius and eccentricity. Report the relevant ring name
   and whether the radial relationship persists or occurs only over part of
   the orbit.
@@ -254,16 +278,18 @@ These extend the initial interests and are now enabled with the defaults above.
 | Bodies very close to stars | Large apparent star | Direct scanned stellar parent and valid body/star radii; periapsis-based selection |
 | Close stellar pairs | Compact stellar binaries | Both stellar scans; same binary compatibility and geometry checks |
 | Unusual ring scale with nearby viewpoints | Large rings near a moon | Ring width/parent-relative size attached to matching moon findings |
-| Ringed landable bodies or terrestrial worlds | Distinctive destination | Valid actual rings and explicit landability or supported terrestrial class |
+| Ringed landable bodies | Rings at a landable destination | Valid actual rings and explicit landability; terrestrial class alone does not qualify |
 | Rare body types in unusual relationships | Earth-like or helium/helium-rich moons | Recorded type and direct planetary parent; rare types also labelled in close findings |
 | Extreme landable worlds | Small/large size, high gravity, cold/hot temperature | Explicit landability and the documented limits |
-| Unusual spin/orbit relationships | Rapid spin, inverted orientation, slow rotation relative to year | Absolute period, spin/orbit ratio, axial tilt in radians; recorded tidal lock retained |
+| Unusual spin/orbit relationships | Rapid spin, slow rotation relative to year | Absolute period and spin/orbit ratio select; axial tilt and recorded tidal lock supply context |
 | Rich combinations | Landable nested moon, rings, inclination and biology | Recorded data combined in relationship findings |
 
 Rotation periods are seconds and axial tilt is radians. Negative rotation periods
 are preserved literally, not alone interpreted as retrograde motion. Axial tilt
-establishes retrograde orientation. Ordinary retrograde tilt is common, so report
-it on another notable spin finding or select an especially inverted spin.
+establishes retrograde spin orientation and is reported only on another notable
+spin finding. Axial tilt alone never qualifies, including near-180-degree tilt.
+Orbital inclination is a separate measurement used by the close ringed-parent
+moon detector; axial tilt does not establish a moon's orbital angle to its parent.
 
 Potential transits, eclipses, ring crossings, and apparent collisions remain
 research topics. They require stronger three-dimensional geometry and, for

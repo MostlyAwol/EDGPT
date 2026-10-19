@@ -28,7 +28,6 @@ COLD_LANDABLE_K = 20.0
 HOT_LANDABLE_K = 1500.0
 FAST_ROTATION_HOURS = 1.0
 SLOW_SPIN_ORBIT_RATIO = 10.0
-INVERTED_SPIN_DEG = 175.0
 EARTH_GRAVITY = 9.80665
 EARTH_MASS_KG = 5.97219e24
 GGG_CRITERIA_VERSION = "edGGG-temperature-table-2026-10-05"
@@ -51,8 +50,6 @@ _GGG_WINDOWS = {
     "Class IV gas giant": ((1149.999878, 1150.0, 0.0),),
 }
 _RARE_CLASSES = {"Earthlike body", "Helium gas giant", "Helium-rich gas giant"}
-_TERRESTRIAL_CLASSES = {"Rocky body", "Rocky ice body", "Icy body", "Metal rich body",
-                        "High metal content body", "Earthlike body", "Water world", "Ammonia world"}
 
 
 def _number(value):
@@ -308,6 +305,22 @@ def close_pairs(system_map):
     return results
 
 
+def _shepherd_gap(rings, orbit, radius, parent_radius):
+    """Find a gap containing the whole moon throughout its radial orbit."""
+    low, high = orbit[0] - radius, orbit[1] + radius
+    if parent_radius is not None and parent_radius < low and high < rings[0][1]:
+        return "parent surface", parent_radius, f"{rings[0][0]} inner edge", rings[0][1]
+    # Track the union of occupied bands so overlapping rings cannot create gaps.
+    outer_name, _, outer = rings[0]
+    for name, inner, next_outer in rings[1:]:
+        if outer < low and high < inner:
+            if parent_radius is None or low > parent_radius:
+                return f"{outer_name} outer edge", outer, f"{name} inner edge", inner
+        if next_outer > outer:
+            outer_name, outer = name, next_outer
+    return None
+
+
 def close_moons_of_ringed_parents(system_map):
     nodes, results = _nodes(system_map), []
     for body_id, moon in sorted(nodes.items()):
@@ -339,18 +352,31 @@ def close_moons_of_ringed_parents(system_map):
                 if _close(distance):
                     maximum = max(abs(low - edge), abs(high - edge)) - radius
                     evidence.append(f"{ring_name} {edge_name} edge: calculated radial surface-to-edge clearance {_km(distance)} minimum to {_km(max(maximum, 0))} maximum" + ("; radial ranges overlap" if centre_min <= radius else ""))
+        close = bool(evidence)
+        gap = _shepherd_gap(rings, orbit, radius, parent_radius)
+        if gap:
+            lower_name, lower, upper_name, upper = gap
+            evidence.append(
+                f"shepherd moon candidate between {lower_name} and {upper_name}; "
+                f"calculated radial surface clearance to {lower_name} "
+                f"{_km(low - radius - lower)} minimum to {_km(high - radius - lower)} maximum; "
+                f"to {upper_name} {_km(upper - high - radius)} minimum "
+                f"to {_km(upper - low - radius)} maximum")
         if not evidence:
             continue
         if high + radius < rings[0][1]:
             location = "inside innermost ring throughout orbit"
         elif low - radius > max(ring[2] for ring in rings):
             location = "outside outermost ring throughout orbit"
-        elif any(low - radius > left[2] and high + radius < right[1]
-                 for left, right in zip(rings, rings[1:])):
+        elif gap:
             location = "between ring bands throughout orbit"
         else:
             location = "radial relationship varies or overlaps ring bands"
         label = "Close nested moon of ringed parent" if _nested(nodes, moon) else "Close moon of ringed parent"
+        if not close:
+            label = "Shepherd moon candidate of ringed parent"
+            if _nested(nodes, moon):
+                label = "Nested shepherd moon candidate of ringed parent"
         inclination = _inclination(scan)
         if inclination:
             label = "Highly inclined " + label[0].lower() + label[1:]
@@ -414,7 +440,14 @@ def close_stellar_relationships(system_map):
         if not all(_scan(node).get("StarType") for node in (first, second)):
             continue
         if low < 0 or _close(low) or low / total_radius < CLOSE_PAIR_GAP_RADII:
-            results.append(f"Close stellar binary: {_name(first)} ({_scan(first)['StarType']} star) and {_name(second)} ({_scan(second)['StarType']} star); calculated surface-to-surface clearance {_km(low)} at periapsis to {_km(high)} at apoapsis; orbital period {_period(_scan(first)['OrbitalPeriod'])}.")
+            larger = max((first, second), key=lambda node: _radius(_scan(node)))
+            larger_radius = _radius(_scan(larger))
+            relative_low, relative_high = _number(low / larger_radius), _number(high / larger_radius)
+            clearance = f"{_km(low)} at periapsis to {_km(high)} at apoapsis"
+            if relative_low is not None and relative_high is not None:
+                clearance = (f"{relative_low:.3f} at periapsis to {relative_high:.3f} at apoapsis "
+                             f"times the radius of {_name(larger)} (larger star)")
+            results.append(f"Close stellar binary: {_name(first)} ({_scan(first)['StarType']} star) and {_name(second)} ({_scan(second)['StarType']} star); calculated surface-to-surface clearance {clearance}; orbital period {_period(_scan(first)['OrbitalPeriod'])}; closest surface-to-surface clearance {_km(low)}.")
     nodes = _nodes(system_map)
     for _, body in sorted(nodes.items()):
         kind, parent_id = _parent(body)
@@ -479,8 +512,8 @@ def unusual_body_properties(system_map):
             if details and orbit:
                 details.append(f"orbital periapsis {_km(orbit[0])}, apoapsis {_km(orbit[1])}")
         rings = _rings(scan)
-        if rings and (scan.get("Landable") is True or planet_class in _TERRESTRIAL_CLASSES):
-            details.append(f"ringed {scan['PlanetClass']}")
+        if rings and scan.get("Landable") is True:
+            details.append(f"ringed landable {scan['PlanetClass']}")
             details.extend(f"{name}: inner radius {_km(inner)}, outer radius {_km(outer)}" for name, inner, outer in rings)
         parent = _planet_parent(nodes, node)
         if planet_class in _RARE_CLASSES and parent:
@@ -504,11 +537,9 @@ def unusual_body_properties(system_map):
             ratio = _number(abs(rotation) / period) if period is not None and period > 0 else None
             if ratio is not None and ratio >= SLOW_SPIN_ORBIT_RATIO:
                 spin.append(f"rotation/orbit period ratio {ratio:.3f}")
-            # Ordinary retrograde tilt is common. Select inverted spins separately,
-            # or include retrograde orientation on an already notable spin finding.
-            if tilt is not None and math.pi / 2 < abs(tilt) <= math.pi:
-                if spin or abs(math.degrees(tilt)) >= INVERTED_SPIN_DEG:
-                    spin.append(f"retrograde axial tilt {math.degrees(tilt):.3f} degrees")
+            # Tilt supplies context for a notable spin, never a standalone alert.
+            if spin and tilt is not None and math.pi / 2 < abs(tilt) <= math.pi:
+                spin.append(f"retrograde axial tilt {math.degrees(tilt):.3f} degrees")
             if spin:
                 details.extend(spin)
                 details.append(f"recorded rotation period {rotation:.6f} seconds")

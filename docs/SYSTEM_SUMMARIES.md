@@ -64,6 +64,11 @@ See the curiosity roadmap for formulas and geometry limitations. Detector result
 retain rule order. Detectors must not mutate inputs; the builder also supplies
 a copy of the map to protect the source of truth.
 
+Standalone ring findings require explicit landability. Rings on non-landable
+terrestrial worlds and axial tilt alone do not select a body. Retrograde axial
+tilt supplies context for an independently qualifying spin finding; orbital
+inclination remains part of close ringed-parent moon findings.
+
 Planned detectors and research candidates are tracked separately in
 [CURIOSITIES_ROADMAP.md](CURIOSITIES_ROADMAP.md).
 

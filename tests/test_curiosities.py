@@ -149,6 +149,86 @@ class CuriosityTests(unittest.TestCase):
             self.assertEqual(curiosities.find_curiosities(value), findings)
 
 
+class ShepherdMoonTests(unittest.TestCase):
+    def system(self, axis=10_000_000, eccentricity=0, **fields):
+        value = ringed(axis, eccentricity, OrbitalPeriod=10000, Landable=False, **fields)
+        value["nodes"]["1"]["event_data"]["Scan"]["Rings"] = [
+            {"Name": "Test 1 A Ring", "InnerRad": 20_000_000, "OuterRad": 30_000_000},
+            {"Name": "Test 1 B Ring", "InnerRad": 60_000_000, "OuterRad": 70_000_000}]
+        return value
+
+    def test_inside_ring_without_proximity_and_summary(self):
+        value = self.system(eccentricity=0.1)
+        original = deepcopy(value)
+        findings = curiosities.close_moons_of_ringed_parents(value)
+        self.assertEqual(len(findings), 1)
+        text = findings[0]
+        self.assertTrue(text.startswith("Shepherd moon candidate"))
+        self.assertIn("Test 2 (not landable)", text)
+        self.assertIn("between parent surface and Test 1 A Ring inner edge", text)
+        self.assertIn("7,500.000 km minimum to 9,500.000 km maximum", text)
+        self.assertIn("8,500.000 km minimum to 10,500.000 km maximum", text)
+        self.assertIn("inside innermost ring throughout orbit", text)
+        self.assertEqual(build_system_summary(value)["curiosities"], curiosities.find_curiosities(value))
+        self.assertIn(text, curiosities.find_curiosities(value))
+        self.assertEqual(value, original)
+
+    def test_between_rings_without_proximity_and_stable_order(self):
+        value = self.system(45_000_000)
+        findings = curiosities.close_moons_of_ringed_parents(value)
+        self.assertEqual(len(findings), 1)
+        self.assertIn("between Test 1 A Ring outer edge and Test 1 B Ring inner edge", findings[0])
+        self.assertIn("between ring bands throughout orbit", findings[0])
+        scan = value["nodes"]["1"]["event_data"]["Scan"]
+        scan["Rings"] = list(reversed(scan["Rings"] * 2))
+        value["nodes"] = dict(reversed(list(value["nodes"].items())))
+        self.assertEqual(curiosities.close_moons_of_ringed_parents(value), findings)
+
+    def test_boundaries_crossing_and_outside_are_not_shepherd_candidates(self):
+        for axis, eccentricity in ((1_500_000, 0), (19_500_000, 0),
+                                    (30_500_000, 0), (59_500_000, 0),
+                                    (25_000_000, 0), (80_000_000, 0),
+                                    (15_000_000, 0.4), (45_000_000, 0.4)):
+            with self.subTest(axis=axis, eccentricity=eccentricity):
+                findings = curiosities.close_moons_of_ringed_parents(
+                    self.system(axis, eccentricity=eccentricity))
+                self.assertNotIn("shepherd", " ".join(findings).lower())
+
+    def test_overlapping_bands_do_not_create_false_gap(self):
+        value = self.system(45_000_000)
+        value["nodes"]["1"]["event_data"]["Scan"]["Rings"].append(
+            {"Name": "Enclosing Ring", "InnerRad": 25_000_000, "OuterRad": 65_000_000})
+        self.assertEqual(curiosities.close_moons_of_ringed_parents(value), [])
+
+    def test_close_findings_combine_and_nested_parent_qualifies(self):
+        value = ringed(1_800_000, Radius=100_000)
+        findings = curiosities.close_moons_of_ringed_parents(value)
+        self.assertEqual(len(findings), 1)
+        self.assertIn("shepherd moon candidate", findings[0])
+        self.assertIn("Close moon of ringed parent", findings[0])
+        value = self.system()
+        apply_event(value, planet(1, [{"Planet": 20}, {"Star": 0}],
+                                  Radius=1_000_000,
+                                  Rings=value["nodes"]["1"]["event_data"]["Scan"]["Rings"]))
+        apply_event(value, planet(20, [{"Star": 0}]))
+        self.assertIn("Nested shepherd moon candidate", curiosities.close_moons_of_ringed_parents(value)[0])
+        value["nodes"].pop("1")
+        self.assertEqual(curiosities.close_moons_of_ringed_parents(value), [])
+
+    def test_missing_invalid_geometry(self):
+        for field, replacement in (("Radius", None), ("Radius", True),
+                                   ("SemiMajorAxis", float("inf")), ("Eccentricity", None)):
+            value = self.system()
+            value["nodes"]["2"]["event_data"]["Scan"][field] = replacement
+            self.assertEqual(curiosities.close_moons_of_ringed_parents(value), [])
+        value = self.system()
+        value["nodes"]["1"]["event_data"]["Scan"].pop("Radius")
+        self.assertEqual(curiosities.close_moons_of_ringed_parents(value), [])
+        # A gap between two rings does not require the parent's surface radius.
+        value["nodes"]["2"]["event_data"]["Scan"]["SemiMajorAxis"] = 45_000_000
+        self.assertEqual(len(curiosities.close_moons_of_ringed_parents(value)), 1)
+
+
 class ExtendedCuriosityTests(unittest.TestCase):
     def nested(self, axis=2_499_000, **fields):
         return model(planet(1, [{"Star": 0}], SemiMajorAxis=100_000_000),
@@ -272,11 +352,27 @@ class ExtendedCuriosityTests(unittest.TestCase):
         self.assertEqual(curiosities.possible_green_gas_giants(value), [])
         self.assertEqual(curiosities.unusual_body_properties(value), [])
 
-    def test_inverted_spin_boundary_and_ordinary_retrograde(self):
-        for tilt, expected in ((120, False), (174.999, False), (175, True), (-175, True), (181, False)):
+    def test_axial_tilt_alone_does_not_select_a_body(self):
+        for tilt in (120, 174.999, 175, -175, 175.796, 180, 181):
             value = model(planet(1, [{"Star": 0}], OrbitalPeriod=10000,
                                  RotationPeriod=10000, AxialTilt=math.radians(tilt)))
-            self.assertEqual(bool(curiosities.unusual_body_properties(value)), expected)
+            self.assertEqual(curiosities.unusual_body_properties(value), [])
+
+    def test_reported_non_landable_examples_do_not_select_bodies(self):
+        value = model(
+            planet(1, [{"Star": 0}], BodyName="Umbaiss GR-T d4-141 ABC 2",
+                   Landable=False, OrbitalPeriod=1_000_000, RotationPeriod=113045.598546,
+                   AxialTilt=math.radians(175.796), TidalLock=False),
+            planet(2, [{"Star": 0}], BodyName="Umbaiss GR-T d4-146 D 7",
+                   Landable=False, OrbitalPeriod=1_000_000, PlanetClass="Icy body",
+                   Rings=[{"Name": "Umbaiss GR-T d4-146 D 7 A Ring",
+                           "InnerRad": 18_824_000, "OuterRad": 45_433_000}]),
+            planet(3, [{"Star": 0}], BodyName="Umbaiss GR-T d4-154 4",
+                   Landable=False, OrbitalPeriod=1_000_000, PlanetClass="High metal content body",
+                   Rings=[{"Name": "Umbaiss GR-T d4-154 4 A Ring",
+                           "InnerRad": 17_638_000, "OuterRad": 58_007_000}]))
+        self.assertEqual(curiosities.find_curiosities(value), [])
+        self.assertNotIn("Curiosities", build_system_summary(value)["summary_text"])
 
     def test_derived_ratio_overflow_is_not_reported_as_data(self):
         value = model(planet(1, [{"Star": 0}], OrbitalPeriod=1e-308, RotationPeriod=1e308))
@@ -318,6 +414,35 @@ class ExtendedCuriosityTests(unittest.TestCase):
         value["nodes"]["2"]["event_data"]["Scan"]["OrbitalPeriod"] = 2000
         self.assertEqual(curiosities.close_stellar_relationships(value), [])
 
+    def test_stellar_binary_clearance_uses_larger_star_radius(self):
+        value = binary(1_000_000, eccentricity=0.5)
+        for body_id in (1, 2):
+            scan = value["nodes"][str(body_id)]["event_data"]["Scan"]
+            scan.pop("PlanetClass")
+            scan["StarType"] = "K"
+        value["nodes"]["2"]["event_data"]["Scan"]["Radius"] = 1_000_000
+        text = curiosities.close_stellar_relationships(value)[0]
+        self.assertIn("clearance 0.500 at periapsis to 4.500 at apoapsis", text)
+        self.assertIn("times the radius of Test 2 (larger star)", text)
+        self.assertTrue(text.endswith("closest surface-to-surface clearance 500.000 km."))
+        value["nodes"] = dict(reversed(list(value["nodes"].items())))
+        self.assertEqual(curiosities.close_stellar_relationships(value), [text])
+        # Swapping the radii must use the other star as the same-sized reference.
+        value["nodes"]["1"]["event_data"]["Scan"]["Radius"] = 1_000_000
+        value["nodes"]["2"]["event_data"]["Scan"]["Radius"] = 500_000
+        self.assertIn("times the radius of Test 1 (larger star)",
+                      curiosities.close_stellar_relationships(value)[0])
+
+    def test_stellar_binary_clearance_keeps_signed_overlap(self):
+        value = binary(-100_000)
+        for body_id in (1, 2):
+            scan = value["nodes"][str(body_id)]["event_data"]["Scan"]
+            scan.pop("PlanetClass")
+            scan["StarType"] = "K"
+        text = curiosities.close_stellar_relationships(value)[0]
+        self.assertIn("clearance -0.200 at periapsis to -0.200 at apoapsis", text)
+        self.assertTrue(text.endswith("closest surface-to-surface clearance -100.000 km."))
+
     def test_short_period_eccentricity_and_thresholds(self):
         value = model(planet(1, [{"Star": 0}], OrbitalPeriod=3600, Eccentricity=0.9))
         text = curiosities.unusual_body_properties(value)[0]
@@ -343,13 +468,19 @@ class ExtendedCuriosityTests(unittest.TestCase):
         self.assertIn("near-polar orbit", text)
         self.assertEqual(len(curiosities.close_moons_of_ringed_parents(value)), 1)
 
-    def test_ringed_terrestrial_and_rare_moon(self):
+    def test_ringed_landable_and_rare_moon(self):
         value = ringed(OrbitalPeriod=10000)
         parent_scan = value["nodes"]["1"]["event_data"]["Scan"]
-        parent_scan.update(OrbitalPeriod=10000, Landable=False)
+        parent_scan.update(OrbitalPeriod=10000, Landable=True)
         findings = curiosities.unusual_body_properties(value)
         self.assertEqual(len(findings), 1)
-        self.assertIn("ringed Rocky body", findings[0])
+        self.assertIn("ringed landable Rocky body", findings[0])
+        parent_scan["Landable"] = False
+        self.assertEqual(curiosities.unusual_body_properties(value), [])
+        self.assertEqual(len(curiosities.close_moons_of_ringed_parents(value)), 1)
+        for landability in (None, "true", 1):
+            parent_scan["Landable"] = landability
+            self.assertEqual(curiosities.unusual_body_properties(value), [])
         parent_scan["PlanetClass"] = "Class I gas giant"
         self.assertEqual(curiosities.unusual_body_properties(value), [])
         value["nodes"]["2"]["event_data"]["Scan"]["PlanetClass"] = "Earthlike body"
